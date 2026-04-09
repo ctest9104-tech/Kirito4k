@@ -329,12 +329,7 @@ const AD_NUKE_CSS = `
 function Player({ playing, onClose }) {
   const [serverId, setServerId] = useState(getStoredServer);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [useSandbox, setUseSandbox] = useState(true);
-  const [sandboxFailed, setSandboxFailed] = useState(false);
-  const [iframeLoaded, setIframeLoaded] = useState(false);
   const shieldRef = useRef(null);
-  const iframeRef = useRef(null);
-  const sandboxTimerRef = useRef(null);
 
   const server = SERVERS.find(s => s.id === serverId) || SERVERS[0];
 
@@ -346,24 +341,17 @@ function Player({ playing, onClose }) {
       console.log("[Kirito4K] Blocked popup attempt");
       return null;
     };
-
-    // Refocus if ad steals focus
     const onBlur = () => {
       setTimeout(() => { try { window.focus(); } catch(e){} }, 50);
     };
     window.addEventListener("blur", onBlur);
-
-    // Block anchor clicks on parent
     const blockLinks = (e) => {
       const a = e.target.closest?.("a[target='_blank']");
       if (a) { e.preventDefault(); e.stopPropagation(); }
     };
     document.addEventListener("click", blockLinks, true);
-
-    // Block beforeunload hijacks
     const blockUnload = (e) => { e.stopImmediatePropagation(); };
     window.addEventListener("beforeunload", blockUnload, true);
-
     return () => {
       window.open = origOpen;
       window.removeEventListener("blur", onBlur);
@@ -372,40 +360,11 @@ function Player({ playing, onClose }) {
     };
   }, [playing]);
 
-  // Method 1: Sandbox auto-fallback
-  // Start with sandbox. If iframe doesn't fire load event within 6s,
-  // assume provider detected sandbox and killed playback → retry without it
-  useEffect(() => {
-    if (!playing || !useSandbox) return;
-    setIframeLoaded(false);
-    sandboxTimerRef.current = setTimeout(() => {
-      if (!iframeLoaded) {
-        console.log("[Kirito4K] Sandbox may have blocked playback — retrying without sandbox");
-        setUseSandbox(false);
-        setSandboxFailed(true);
-      }
-    }, 6000);
-    return () => clearTimeout(sandboxTimerRef.current);
-  }, [playing, useSandbox, serverId]);
-
-  const handleIframeLoad = () => {
-    setIframeLoaded(true);
-    clearTimeout(sandboxTimerRef.current);
-  };
-
-  // Reset sandbox attempt when switching servers
-  useEffect(() => {
-    if (!sandboxFailed) {
-      setUseSandbox(true);
-    }
-  }, [serverId]);
-
-  // Method 3: Pointer-events shield — absorbs ad click, passes through to player
+  // Method 4: Click shield — absorbs ad click, passes next to player
   const handleShieldClick = useCallback((e) => {
     e.stopPropagation();
     e.preventDefault();
     if (shieldRef.current) {
-      // Temporarily disable shield so next click hits real player
       shieldRef.current.style.pointerEvents = "none";
       setTimeout(() => {
         if (shieldRef.current) shieldRef.current.style.pointerEvents = "auto";
@@ -417,9 +376,6 @@ function Player({ playing, onClose }) {
     setServerId(id);
     storeServer(id);
     setShowDropdown(false);
-    // Reset sandbox for new server (it might support it)
-    setSandboxFailed(false);
-    setUseSandbox(true);
   };
 
   if (!playing) return null;
@@ -429,30 +385,16 @@ function Player({ playing, onClose }) {
   else if (playing.episode) embedSrc = server.episodeUrl(playing.tmdbId, playing.season, playing.episode);
   else embedSrc = server.tvUrl(playing.tmdbId);
 
-  // Sandbox attributes: allow everything EXCEPT popups
-  const sandboxValue = "allow-forms allow-scripts allow-same-origin allow-presentation allow-orientation-lock allow-pointer-lock allow-top-navigation-by-user-activation";
-
   return (
     <div className="k4k-player-modal" onClick={onClose}>
       <style>{AD_NUKE_CSS}</style>
       <div className="k4k-player-box" onClick={e => e.stopPropagation()}>
         <button className="k4k-player-close" onClick={onClose}><Icons.Close /></button>
 
-        {/* Server selector + sandbox status */}
         <div className="k4k-server-bar" onClick={e => e.stopPropagation()}>
           <button className="k4k-server-btn" onClick={() => setShowDropdown(!showDropdown)}>
             <Icons.Server /> {server.name} ▾
           </button>
-          {useSandbox && !sandboxFailed && (
-            <div style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:12, background:"rgba(34,197,94,0.15)", border:"1px solid rgba(34,197,94,0.3)", fontSize:10, fontWeight:700, color:"var(--green)" }}>
-              <Icons.Shield /> Protected
-            </div>
-          )}
-          {sandboxFailed && (
-            <div style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:12, background:"rgba(234,179,8,0.15)", border:"1px solid rgba(234,179,8,0.3)", fontSize:10, fontWeight:700, color:"#eab308" }}>
-              Reduced Protection
-            </div>
-          )}
           {showDropdown && (
             <div className="k4k-server-dropdown">
               {SERVERS.map(s => (
@@ -461,34 +403,19 @@ function Player({ playing, onClose }) {
                   {s.id === serverId && <div className="k4k-server-dot" />}
                 </div>
               ))}
-              <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)", padding:"8px 14px" }}>
-                <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"var(--text2)", cursor:"pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={useSandbox && !sandboxFailed}
-                    onChange={(e) => { setUseSandbox(e.target.checked); if (e.target.checked) setSandboxFailed(false); }}
-                    style={{ accentColor: "var(--green)" }}
-                  />
-                  Popup protection {sandboxFailed && <span style={{ color:"#eab308", fontSize:10 }}>(broke this server)</span>}
-                </label>
-              </div>
             </div>
           )}
         </div>
 
         <div className="k4k-player-wrap" style={{ position: "relative", width: "100%", height: "100%" }}>
           <iframe
-            ref={iframeRef}
-            key={`${serverId}-${useSandbox}`}
+            key={serverId}
             className="k4k-player-iframe"
             src={embedSrc}
             allowFullScreen
             allow="autoplay; fullscreen; encrypted-media"
             referrerPolicy="origin"
-            onLoad={handleIframeLoad}
-            {...(useSandbox && !sandboxFailed ? { sandbox: sandboxValue } : {})}
           />
-          {/* Click shield — absorbs first ad click, lets second reach player */}
           <div
             ref={shieldRef}
             onClick={handleShieldClick}
