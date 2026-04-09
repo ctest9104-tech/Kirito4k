@@ -6,26 +6,33 @@ const IMG = "https://image.tmdb.org/t/p";
 
 // =====================================================
 // ✅ VSEMBED.RU API CONFIG — Fully Configured
+// VsEmbed uses IMDb IDs, not TMDB IDs
 // =====================================================
 const EMBED_API = {
-  // Movie embed using TMDB ID
-  movie: (tmdbId) => `https://vsembed.ru/embed/movie/${tmdbId}`,
+  // Movie embed using IMDb ID
+  // Format: https://vsembed.ru/embed/{imdb_id}
+  movie: (imdbId) => `https://vsembed.ru/embed/${imdbId}`,
   
-  // TV series embed using TMDB ID
-  tv: (tmdbId) => `https://vsembed.ru/embed/tv/${tmdbId}`,
+  // TV series embed using IMDb ID
+  // Format: https://vsembed.ru/embed/{imdb_id}/{season}-{episode}
+  tv: (imdbId) => `https://vsembed.ru/embed/${imdbId}`,
   
   // Episode embed with season and episode numbers
-  episode: (tmdbId, season, episode) => `https://vsembed.ru/embed/tv/${tmdbId}/${season}/${episode}`,
-  
-  // Latest movies endpoint
-  latestMovies: (page = 1) => `https://vsembed.ru/api/latest/movies?page=${page}`,
-  
-  // Latest TV shows endpoint
-  latestShows: (page = 1) => `https://vsembed.ru/api/latest/tv?page=${page}`,
-  
-  // Latest episodes endpoint
-  latestEpisodes: (page = 1) => `https://vsembed.ru/api/latest/episodes?page=${page}`,
+  episode: (imdbId, season, episode) => `https://vsembed.ru/embed/${imdbId}/${season}-${episode}`,
 };
+
+// Helper function to convert TMDB ID to IMDb ID
+async function getTmdbData(type, id) {
+  try {
+    const url = new URL(`${TMDB}/${type}/${id}`);
+    url.searchParams.set("api_key", TMDB_KEY);
+    const r = await fetch(url);
+    const data = await r.json();
+    return data.external_ids?.imdb_id || null;
+  } catch {
+    return null;
+  }
+}
 
 // --- ICONS ---
 const Icons = {
@@ -181,28 +188,6 @@ async function tmdbFetch(path, params = {}) {
 function posterUrl(path, size = "w500") { return path ? `${IMG}/${size}${path}` : ""; }
 function backdropUrl(path) { return path ? `${IMG}/original${path}` : ""; }
 
-// =====================================================
-// Fetch latest content from VsEmbed API
-// =====================================================
-async function fetchLatestFromApi(type = "movies", page = 1) {
-  try {
-    let url;
-    if (type === "movies") url = EMBED_API.latestMovies(page);
-    else if (type === "tv") url = EMBED_API.latestShows(page);
-    else url = EMBED_API.latestEpisodes(page);
-    
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`API returned ${r.status}`);
-    const data = await r.json();
-    
-    // Parse VsEmbed API response
-    return data?.results || data?.data || data || [];
-  } catch (error) { 
-    console.error(`Error fetching ${type}:`, error);
-    return []; 
-  }
-}
-
 // --- ROW COMPONENT ---
 function Row({ title, items, type, onSelect }) {
   const ref = useRef();
@@ -236,26 +221,38 @@ function Player({ playing, onClose }) {
   if (!playing) return null;
   
   let embedSrc = null;
-  if (playing.type === "movie") {
-    embedSrc = EMBED_API.movie(playing.tmdbId);
-  } else if (playing.episode) {
-    embedSrc = EMBED_API.episode(playing.tmdbId, playing.season, playing.episode);
-  } else {
-    embedSrc = EMBED_API.tv(playing.tmdbId);
+  if (playing.imdbId) {
+    if (playing.type === "movie") {
+      embedSrc = EMBED_API.movie(playing.imdbId);
+    } else if (playing.episode) {
+      embedSrc = EMBED_API.episode(playing.imdbId, playing.season, playing.episode);
+    } else {
+      embedSrc = EMBED_API.tv(playing.imdbId);
+    }
   }
   
   return (
     <div className="k4k-player-modal" onClick={onClose}>
       <div className="k4k-player-box" onClick={e => e.stopPropagation()}>
         <button className="k4k-player-close" onClick={onClose}><Icons.Close /></button>
-        <iframe 
-          className="k4k-player-iframe" 
-          src={embedSrc} 
-          allowFullScreen 
-          allow="autoplay; fullscreen; encrypted-media" 
-          referrerPolicy="origin"
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock"
-        />
+        {embedSrc ? (
+          <iframe 
+            className="k4k-player-iframe" 
+            src={embedSrc} 
+            allowFullScreen 
+            allow="autoplay; fullscreen; encrypted-media" 
+            referrerPolicy="origin"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock"
+          />
+        ) : (
+          <div className="k4k-player-placeholder">
+            <Icons.Play />
+            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 24, color: "var(--text)" }}>{playing.title}</div>
+            <div style={{ fontSize: 13, maxWidth: 420, textAlign: "center", lineHeight: 1.6 }}>
+              Loading embed player...
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -268,12 +265,19 @@ function DetailPage({ item, type, onClose }) {
   const [season, setSeason] = useState(1);
   const [episodes, setEpisodes] = useState([]);
   const [playing, setPlaying] = useState(null);
+  const [imdbId, setImdbId] = useState(null);
 
   useEffect(() => {
     (async () => {
       const [d, c] = await Promise.all([tmdbFetch(`/${type}/${item.id}`), tmdbFetch(`/${type}/${item.id}/credits`)]);
       setDetail(d); 
       setCredits(c);
+      
+      // Get IMDb ID from external_ids
+      if (d?.external_ids?.imdb_id) {
+        setImdbId(d.external_ids.imdb_id);
+      }
+      
       if (type === "tv" && d?.seasons?.length) {
         const s = d.seasons.find(s => s.season_number === 1) || d.seasons[0];
         setSeason(s.season_number);
@@ -312,7 +316,7 @@ function DetailPage({ item, type, onClose }) {
         <div className="k4k-detail-genres">{(detail?.genres || []).map(g => <span key={g.id} className="k4k-detail-genre">{g.name}</span>)}</div>
         <div className="k4k-detail-overview">{detail?.overview}</div>
         <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
-          <button className="k4k-btn k4k-btn-primary" onClick={() => setPlaying({ tmdbId: item.id, type, title, season: type === "tv" ? season : undefined, episode: type === "tv" && episodes[0] ? episodes[0].episode_number : undefined })}>
+          <button className="k4k-btn k4k-btn-primary" onClick={() => setPlaying({ imdbId, type, title, season: type === "tv" ? season : undefined, episode: type === "tv" && episodes[0] ? episodes[0].episode_number : undefined })}>
             <Icons.Play /> {type === "movie" ? "Watch Now" : "Play S1:E1"}
           </button>
         </div>
@@ -338,7 +342,7 @@ function DetailPage({ item, type, onClose }) {
             </div>
             <div className="k4k-episodes">
               {episodes.map(ep => (
-                <div key={ep.id} className="k4k-episode" onClick={() => setPlaying({ tmdbId: item.id, type: "tv", title: `${detail.name} S${season}:E${ep.episode_number}`, season, episode: ep.episode_number })}>
+                <div key={ep.id} className="k4k-episode" onClick={() => setPlaying({ imdbId, type: "tv", title: `${detail.name} S${season}:E${ep.episode_number}`, season, episode: ep.episode_number })}>
                   {ep.still_path ? <img className="k4k-ep-still" src={posterUrl(ep.still_path, "w300")} alt="" loading="lazy" /> : <div className="k4k-ep-still k4k-skeleton" />}
                   <div className="k4k-ep-info">
                     <div className="k4k-ep-num">EPISODE {ep.episode_number}</div>
@@ -369,7 +373,6 @@ export default function Kirito4k() {
   const [rows, setRows] = useState({});
   const [detail, setDetail] = useState(null);
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [latestRows, setLatestRows] = useState({ movies: [], tv: [], episodes: [] });
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40);
@@ -404,18 +407,6 @@ export default function Kirito4k() {
     })();
   }, []);
 
-  // Load latest content from VsEmbed API
-  useEffect(() => {
-    (async () => {
-      const [movies, tv, episodes] = await Promise.all([
-        fetchLatestFromApi("movies", 1),
-        fetchLatestFromApi("tv", 1),
-        fetchLatestFromApi("episodes", 1),
-      ]);
-      setLatestRows({ movies: movies || [], tv: tv || [], episodes: episodes || [] });
-    })();
-  }, []);
-
   useEffect(() => {
     if (!hero?.length) return;
     const t = setInterval(() => setHeroIdx(i => (i + 1) % hero.length), 8000);
@@ -444,10 +435,6 @@ export default function Kirito4k() {
     : tab === "tv"
     ? { "Airing Now": rows.airingTv, "Top Rated TV": rows.topTv }
     : { "Trending This Week": rows.trending, "Now Playing": rows.nowPlaying, "Top Rated Movies": rows.topMovies, "Popular TV Shows": rows.airingTv, "Top Rated TV": rows.topTv, "Upcoming": rows.upcoming };
-
-  // Merge VsEmbed API latest rows
-  if (latestRows.movies.length) filteredRows["Recently Added Movies"] = latestRows.movies;
-  if (latestRows.tv.length) filteredRows["Recently Added Shows"] = latestRows.tv;
 
   return (
     <>
