@@ -7,14 +7,13 @@ const IMG = "https://image.tmdb.org/t/p";
 const SERVERS = [
   { id: "vidsrc", name: "VidSrc (Best)", movieUrl: (id) => `https://vsrc.su/embed/movie?tmdb=${id}`, tvUrl: (id) => `https://vsrc.su/embed/tv?tmdb=${id}`, episodeUrl: (id, s, e) => `https://vsrc.su/embed/tv?tmdb=${id}&season=${s}&episode=${e}` },
   { id: "vidlink", name: "VidLink", movieUrl: (id) => `https://vidlink.pro/movie/${id}`, tvUrl: (id) => `https://vidlink.pro/tv/${id}`, episodeUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}` },
-  { id: "embedsu", name: "Embed.su", movieUrl: (id) => `https://embed.su/embed/movie/${id}`, tvUrl: (id) => `https://embed.su/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
 ];
 
 const css = `
 :root { --bg: #050508; --accent: #e50914; --surface: #111118; }
 body { margin:0; background: var(--bg); color: #fff; font-family: sans-serif; overflow-x: hidden; }
 .nav { height: 70px; display: flex; align-items: center; padding: 0 40px; background: #000; position: fixed; width: 100%; z-index: 100; border-bottom: 1px solid #222; }
-.logo { font-size: 28px; font-weight: 900; color: var(--accent); cursor: pointer; text-decoration: none; }
+.logo { font-size: 28px; font-weight: 900; color: var(--accent); cursor: pointer; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; padding: 100px 40px; }
 .card { cursor: pointer; transition: 0.2s; background: var(--surface); border-radius: 8px; overflow: hidden; }
 .card:hover { transform: scale(1.03); }
@@ -28,37 +27,40 @@ body { margin:0; background: var(--bg); color: #fff; font-family: sans-serif; ov
 .player-screen { position: fixed; inset: 0; background: #000; z-index: 3000; }
 .player-bar { position: absolute; top: 0; width: 100%; z-index: 4000; display: flex; justify-content: space-between; padding: 15px 25px; background: rgba(0,0,0,0.8); }
 .srv-pill { background: #333; color: #fff; border: 1px solid #555; padding: 6px 12px; border-radius: 4px; font-size: 12px; }
+.focus-alert { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #000; padding: 8px 16px; border-radius: 20px; font-size: 11px; font-weight: bold; z-index: 4001; }
 `;
 
 function Player({ media, onClose }) {
-  const [serverId, setServerId] = useState("vidsrc"); // Defaulted to VidSrc
+  const [serverId, setServerId] = useState("vidsrc");
+  const [isFightingAds, setIsFightingAds] = useState(false);
   const server = SERVERS.find(s => s.id === serverId);
 
   const url = media.episode 
     ? server.episodeUrl(media.tmdbId, media.season, media.episode)
     : (media.type === "movie" ? server.movieUrl(media.tmdbId) : server.tvUrl(media.tmdbId));
 
-  // AUTO-REVERT LOGIC:
-  // If a popup opens, this window loses focus. We force it back immediately.
+  // AGGRESSIVE REVERT LOGIC
+  const startAdFight = () => {
+    setIsFightingAds(true);
+    // For the next 10 seconds, force focus back to this window every 500ms
+    const interval = setInterval(() => {
+      window.focus();
+    }, 500);
+
+    // Stop fighting after 10 seconds to save resources
+    setTimeout(() => {
+      clearInterval(interval);
+      setIsFightingAds(false);
+    }, 10000);
+  };
+
   useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        // The user was just pushed to a new tab. 
-        // We can't close the other tab, but we can alert the user to come back
-        // or attempt to refocus this window.
-        window.focus();
-      }
+    const killPopups = () => { 
+      window.open = () => null;
+      startAdFight(); // Every time the player is clicked, start the focus fight
     };
-
-    const killPopups = () => { window.open = () => null; };
-
-    document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("click", killPopups);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("click", killPopups);
-    };
+    return () => window.removeEventListener("click", killPopups);
   }, []);
 
   return (
@@ -67,8 +69,10 @@ function Player({ media, onClose }) {
         <select className="srv-pill" value={serverId} onChange={(e) => setServerId(e.target.value)}>
           {SERVERS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <button onClick={onClose} style={{ background: "var(--accent)", color: "#fff", border: "none", padding: "8px 20px", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>CLOSE PLAYER</button>
+        <button onClick={onClose} style={{ background: "var(--accent)", color: "#fff", border: "none", padding: "8px 20px", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>CLOSE</button>
       </div>
+
+      {isFightingAds && <div className="focus-alert">🛡️ AGGRESSIVE REVERT ACTIVE: SNAPPING FOCUS BACK</div>}
 
       <iframe 
         key={serverId}
