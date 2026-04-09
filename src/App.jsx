@@ -329,11 +329,10 @@ const AD_NUKE_CSS = `
 function Player({ playing, onClose }) {
   const [serverId, setServerId] = useState(getStoredServer);
   const [showDropdown, setShowDropdown] = useState(false);
-  const shieldRef = useRef(null);
 
   const server = SERVERS.find(s => s.id === serverId) || SERVERS[0];
 
-  // Method 2: window.open Nullifier + blur refocus
+  // Method 2: window.open Nullifier
   useEffect(() => {
     if (!playing) return;
     const origOpen = window.open;
@@ -341,10 +340,6 @@ function Player({ playing, onClose }) {
       console.log("[Kirito4K] Blocked popup attempt");
       return null;
     };
-    const onBlur = () => {
-      setTimeout(() => { try { window.focus(); } catch(e){} }, 50);
-    };
-    window.addEventListener("blur", onBlur);
     const blockLinks = (e) => {
       const a = e.target.closest?.("a[target='_blank']");
       if (a) { e.preventDefault(); e.stopPropagation(); }
@@ -354,22 +349,36 @@ function Player({ playing, onClose }) {
     window.addEventListener("beforeunload", blockUnload, true);
     return () => {
       window.open = origOpen;
-      window.removeEventListener("blur", onBlur);
       document.removeEventListener("click", blockLinks, true);
       window.removeEventListener("beforeunload", blockUnload, true);
     };
   }, [playing]);
 
-  // Method 4: Click shield — absorbs ad click, passes next to player
+  // Method 4: Smart click shield
+  // Shield absorbs the FIRST click (ad trigger), then stays OFF.
+  // Only re-arms if a popup actually gets through (detected via blur).
+  const [shieldOn, setShieldOn] = useState(true);
+
+  // Re-arm shield if popup steals focus
+  useEffect(() => {
+    if (!playing) return;
+    const onBlur = () => {
+      // A popup stole focus — re-arm shield and pull focus back
+      setShieldOn(true);
+      setTimeout(() => { try { window.focus(); } catch(e){} }, 50);
+    };
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, [playing]);
+
+  // Reset shield when switching servers
+  useEffect(() => { setShieldOn(true); }, [serverId]);
+
   const handleShieldClick = useCallback((e) => {
     e.stopPropagation();
     e.preventDefault();
-    if (shieldRef.current) {
-      shieldRef.current.style.pointerEvents = "none";
-      setTimeout(() => {
-        if (shieldRef.current) shieldRef.current.style.pointerEvents = "auto";
-      }, 400);
-    }
+    // First click absorbed — now disable shield so player works normally
+    setShieldOn(false);
   }, []);
 
   const switchServer = (id) => {
@@ -416,11 +425,12 @@ function Player({ playing, onClose }) {
             allow="autoplay; fullscreen; encrypted-media"
             referrerPolicy="origin"
           />
-          <div
-            ref={shieldRef}
-            onClick={handleShieldClick}
-            style={{ position: "absolute", inset: 0, zIndex: 5, cursor: "pointer", background: "transparent" }}
-          />
+          {shieldOn && (
+            <div
+              onClick={handleShieldClick}
+              style={{ position: "absolute", inset: 0, zIndex: 5, cursor: "pointer", background: "transparent" }}
+            />
+          )}
         </div>
       </div>
     </div>
