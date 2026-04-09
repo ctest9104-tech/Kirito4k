@@ -5,20 +5,54 @@ const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
 
 // =====================================================
-// 🔧 EMBED API CONFIG
-//    Replace YOUR_EMBED_DOMAIN with your embed provider
-//    The ${tmdbId}, ${season}, ${episode} variables are
-//    passed automatically — they MUST be in the URLs
+// MULTI-SERVER CONFIG
+// Each server has its own URL pattern for movies/TV/episodes
+// If one server is down, users can switch to another
 // =====================================================
-const EMBED_DOMAIN = "https://vsembed.ru";
-const EMBED_API = {
-  movie:   (tmdbId)                  => `${EMBED_DOMAIN}/embed/movie/${tmdbId}`,
-  tv:      (tmdbId)                  => `${EMBED_DOMAIN}/embed/tv/${tmdbId}`,
-  episode: (tmdbId, season, episode) => `${EMBED_DOMAIN}/embed/tv/${tmdbId}/${season}/${episode}`,
-  latestMovies:   (page) => `${EMBED_DOMAIN}/movies/latest/page-${page}.json`,
-  latestShows:    (page) => `${EMBED_DOMAIN}/tvshows/latest/page-${page}.json`,
-  latestEpisodes: (page) => `${EMBED_DOMAIN}/episodes/latest/page-${page}.json`,
-};
+const SERVERS = [
+  {
+    id: "vidsrc",
+    name: "VidSrc",
+    movieUrl:   (id) => `https://vsrc.su/embed/movie?tmdb=${id}`,
+    tvUrl:      (id) => `https://vsrc.su/embed/tv?tmdb=${id}`,
+    episodeUrl: (id, s, e) => `https://vsrc.su/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
+  },
+  {
+    id: "superembed",
+    name: "SuperEmbed",
+    movieUrl:   (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+    tvUrl:      (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+    episodeUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
+  },
+  {
+    id: "autoembed",
+    name: "AutoEmbed",
+    movieUrl:   (id) => `https://player.autoembed.cc/embed/movie/${id}`,
+    tvUrl:      (id) => `https://player.autoembed.cc/embed/tv/${id}`,
+    episodeUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`,
+  },
+  {
+    id: "111movies",
+    name: "111Movies",
+    movieUrl:   (id) => `https://111movies.com/movie/${id}`,
+    tvUrl:      (id) => `https://111movies.com/tv/${id}`,
+    episodeUrl: (id, s, e) => `https://111movies.com/tv/${id}/${s}/${e}`,
+  },
+  {
+    id: "vidnest",
+    name: "VidNest",
+    movieUrl:   (id) => `https://vidnest.fun/movie/${id}`,
+    tvUrl:      (id) => `https://vidnest.fun/tv/${id}`,
+    episodeUrl: (id, s, e) => `https://vidnest.fun/tv/${id}/${s}/${e}`,
+  },
+];
+
+function getStoredServer() {
+  try { return localStorage.getItem("k4k_server") || "vidsrc"; } catch { return "vidsrc"; }
+}
+function storeServer(id) {
+  try { localStorage.setItem("k4k_server", id); } catch {}
+}
 
 // --- ICONS ---
 const Icons = {
@@ -34,6 +68,10 @@ const Icons = {
   Tv: () => <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="15" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M17 2l-5 5-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   Close: () => <svg width="24" height="24" fill="none" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>,
   Menu: () => <svg width="24" height="24" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>,
+  Server: () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/><rect x="2" y="14" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>,
+  Shield: () => <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>,
+  Check: () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  External: () => <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
 };
 
 const css = `
@@ -50,6 +88,7 @@ const css = `
   --text3: #55556a;
   --glass: rgba(10,10,15,0.85);
   --radius: 8px;
+  --green: #22c55e;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
@@ -145,6 +184,30 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .k4k-footer { margin-top:60px; padding:40px 48px; border-top:1px solid rgba(255,255,255,0.05); text-align:center; color:var(--text3); font-size:12px; }
 .k4k-skeleton { background: linear-gradient(90deg, var(--surface2) 25%, var(--surface) 50%, var(--surface2) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius); }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* SERVER SELECTOR */
+.k4k-server-bar { position:absolute; top:12px; left:12px; z-index:10; display:flex; gap:6px; align-items:center; }
+.k4k-server-btn { display:flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.15); color:var(--text); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:'DM Sans',sans-serif; }
+.k4k-server-btn:hover { border-color:rgba(255,255,255,0.3); background:rgba(0,0,0,0.85); }
+.k4k-server-dropdown { position:absolute; top:100%; left:0; margin-top:6px; background:var(--surface); border:1px solid rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; min-width:180px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); animation: fadeUp 0.15s ease; }
+.k4k-server-item { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; font-size:13px; font-weight:500; cursor:pointer; transition: background 0.15s; color:var(--text2); }
+.k4k-server-item:hover { background:var(--surface2); color:var(--text); }
+.k4k-server-item.active { color:var(--green); }
+.k4k-server-dot { width:6px; height:6px; border-radius:50%; background:var(--green); }
+
+/* ADBLOCKER MODAL */
+.k4k-adblock-overlay { position:fixed; inset:0; z-index:500; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; animation:fadeUp 0.3s ease; }
+.k4k-adblock-modal { background:var(--surface); border:1px solid rgba(255,255,255,0.1); border-radius:16px; max-width:440px; width:90vw; padding:32px; text-align:center; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.k4k-adblock-icon { width:56px; height:56px; margin:0 auto 16px; border-radius:50%; background:rgba(229,9,20,0.15); display:flex; align-items:center; justify-content:center; color:var(--accent); }
+.k4k-adblock-title { font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:1px; margin-bottom:8px; }
+.k4k-adblock-desc { font-size:14px; color:var(--text2); line-height:1.6; margin-bottom:24px; }
+.k4k-adblock-links { display:flex; flex-direction:column; gap:10px; margin-bottom:20px; }
+.k4k-adblock-link { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:10px; background:var(--surface2); border:1px solid rgba(255,255,255,0.06); text-decoration:none; color:var(--text); font-size:13px; font-weight:600; transition:all 0.2s; }
+.k4k-adblock-link:hover { border-color:var(--accent); background:rgba(229,9,20,0.08); }
+.k4k-adblock-link span { color:var(--text3); font-weight:400; font-size:11px; }
+.k4k-adblock-skip { background:none; border:1px solid rgba(255,255,255,0.1); color:var(--text2); padding:10px 24px; border-radius:8px; font-size:13px; cursor:pointer; transition:all 0.2s; font-family:'DM Sans',sans-serif; width:100%; }
+.k4k-adblock-skip:hover { border-color:rgba(255,255,255,0.2); color:var(--text); }
+
 @media(max-width:768px) {
   .k4k-nav-links { display:none; }
   .k4k-mobile-menu { display:block; }
@@ -170,10 +233,7 @@ async function tmdbFetch(path, params = {}) {
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   try {
     const r = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${TMDB_TOKEN}`,
-        "Content-Type": "application/json"
-      }
+      headers: { "Authorization": `Bearer ${TMDB_TOKEN}`, "Content-Type": "application/json" }
     });
     return await r.json();
   } catch { return null; }
@@ -181,22 +241,38 @@ async function tmdbFetch(path, params = {}) {
 function posterUrl(path, size = "w500") { return path ? `${IMG}/${size}${path}` : ""; }
 function backdropUrl(path) { return path ? `${IMG}/original${path}` : ""; }
 
-// =====================================================
-// Fetch latest content from your embed API
-// Uncomment the useEffect in the main app when ready
-// =====================================================
-async function fetchLatestFromApi(type = "movies", page = 1) {
-  try {
-    let url;
-    if (type === "movies") url = EMBED_API.latestMovies(page);
-    else if (type === "tv") url = EMBED_API.latestShows(page);
-    else url = EMBED_API.latestEpisodes(page);
-    const r = await fetch(url);
-    const data = await r.json();
-    // ADAPT: parse your API response shape here
-    // e.g. return data.results || data || [];
-    return data?.results || data || [];
-  } catch { return []; }
+// --- ADBLOCKER RECOMMENDATION ---
+function AdblockerAlert({ onDismiss }) {
+  return (
+    <div className="k4k-adblock-overlay" onClick={onDismiss}>
+      <div className="k4k-adblock-modal" onClick={e => e.stopPropagation()}>
+        <div className="k4k-adblock-icon"><Icons.Shield /></div>
+        <div className="k4k-adblock-title">We Recommend an Ad Blocker</div>
+        <div className="k4k-adblock-desc">
+          <strong style={{ color: "var(--accent)" }}>Kirito4K</strong> itself is completely ad-free.
+          However, the video servers we aggregate from may inject popups or ads within their players.
+          An ad blocker will give you a clean viewing experience.
+        </div>
+        <div className="k4k-adblock-links">
+          <a className="k4k-adblock-link" href="https://ublockorigin.com" target="_blank" rel="noopener noreferrer">
+            <div>uBlock Origin <span>— Chrome / Firefox / Edge</span></div>
+            <Icons.External />
+          </a>
+          <a className="k4k-adblock-link" href="https://adguard.com/en/adguard-browser-extension/overview.html" target="_blank" rel="noopener noreferrer">
+            <div>AdGuard <span>— All browsers + mobile</span></div>
+            <Icons.External />
+          </a>
+          <a className="k4k-adblock-link" href="https://brave.com" target="_blank" rel="noopener noreferrer">
+            <div>Brave Browser <span>— Built-in ad blocker</span></div>
+            <Icons.External />
+          </a>
+        </div>
+        <button className="k4k-adblock-skip" onClick={onDismiss}>
+          No thanks, I'm fine with popups
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // --- ROW COMPONENT ---
@@ -227,39 +303,28 @@ function Row({ title, items, type, onSelect }) {
   );
 }
 
-// --- PLAYER COMPONENT ---
+// --- PLAYER WITH MULTI-SERVER ---
 function Player({ playing, onClose }) {
-  const iframeRef = useRef(null);
+  const [serverId, setServerId] = useState(getStoredServer);
+  const [showDropdown, setShowDropdown] = useState(false);
   const shieldRef = useRef(null);
-  const [shieldActive, setShieldActive] = useState(true);
 
-  // Layer 1: Block window.open + catch blur (new tab opened)
+  const server = SERVERS.find(s => s.id === serverId) || SERVERS[0];
+
+  // Popup mitigation
   useEffect(() => {
     if (!playing) return;
     const origOpen = window.open;
     window.open = () => null;
-
-    // Detect when iframe opens a new tab (window loses focus)
-    let focusCount = 0;
-    const onBlur = () => {
-      focusCount++;
-      // If we lose focus more than once quickly, ads are opening tabs
-      // Refocus back to our window
-      setTimeout(() => { try { window.focus(); } catch(e){} }, 50);
-    };
+    const onBlur = () => { setTimeout(() => { try { window.focus(); } catch(e){} }, 50); };
     window.addEventListener("blur", onBlur);
-
-    // Block any anchor clicks on the parent page
     const blockLinks = (e) => {
       const a = e.target.closest?.("a[target='_blank']");
       if (a) { e.preventDefault(); e.stopPropagation(); }
     };
     document.addEventListener("click", blockLinks, true);
-
-    // Block beforeunload hijacks
     const blockUnload = (e) => { e.stopImmediatePropagation(); };
     window.addEventListener("beforeunload", blockUnload, true);
-
     return () => {
       window.open = origOpen;
       window.removeEventListener("blur", onBlur);
@@ -268,9 +333,7 @@ function Player({ playing, onClose }) {
     };
   }, [playing]);
 
-  // Layer 2: Smart click shield — absorbs first click, passes through second
-  // The shield uses pointer-events toggling: on click it goes transparent
-  // for 150ms to let the real click reach the player, then reactivates
+  // Click shield pass-through
   const handleShieldClick = useCallback((e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -282,54 +345,60 @@ function Player({ playing, onClose }) {
     }
   }, []);
 
-  // Layer 3: Auto-disable shield after 5s so normal playback controls work,
-  // but re-enable on each new click cycle
-  useEffect(() => {
-    if (!shieldActive) {
-      const timer = setTimeout(() => setShieldActive(true), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [shieldActive]);
+  const switchServer = (id) => {
+    setServerId(id);
+    storeServer(id);
+    setShowDropdown(false);
+  };
 
   if (!playing) return null;
-  let embedSrc = null;
-  if (playing.type === "movie") embedSrc = EMBED_API.movie(playing.tmdbId);
-  else if (playing.episode) embedSrc = EMBED_API.episode(playing.tmdbId, playing.season, playing.episode);
-  else embedSrc = EMBED_API.tv(playing.tmdbId);
-  const isPlaceholder = embedSrc.includes("YOUR_EMBED_DOMAIN");
+
+  let embedSrc;
+  if (playing.type === "movie") embedSrc = server.movieUrl(playing.tmdbId);
+  else if (playing.episode) embedSrc = server.episodeUrl(playing.tmdbId, playing.season, playing.episode);
+  else embedSrc = server.tvUrl(playing.tmdbId);
+
   return (
     <div className="k4k-player-modal" onClick={onClose}>
       <div className="k4k-player-box" onClick={e => e.stopPropagation()}>
         <button className="k4k-player-close" onClick={onClose}><Icons.Close /></button>
-        {isPlaceholder ? (
-          <div className="k4k-player-placeholder">
-            <Icons.Play />
-            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 24, color: "var(--text)" }}>{playing.title}</div>
-            <div style={{ fontSize: 13, maxWidth: 420, textAlign: "center", lineHeight: 1.6 }}>
-              No embed API configured yet.<br />
-              Replace the placeholder URLs in <code style={{ background: "var(--surface2)", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>EMBED_API</code> at the top of this file with your API endpoints.
+
+        {/* Server selector */}
+        <div className="k4k-server-bar" onClick={e => e.stopPropagation()}>
+          <button className="k4k-server-btn" onClick={() => setShowDropdown(!showDropdown)}>
+            <Icons.Server /> {server.name} ▾
+          </button>
+          {showDropdown && (
+            <div className="k4k-server-dropdown">
+              {SERVERS.map(s => (
+                <div
+                  key={s.id}
+                  className={`k4k-server-item ${s.id === serverId ? "active" : ""}`}
+                  onClick={() => switchServer(s.id)}
+                >
+                  {s.name}
+                  {s.id === serverId && <div className="k4k-server-dot" />}
+                </div>
+              ))}
             </div>
-          </div>
-        ) : (
-          <div style={{ position: "relative", width: "100%", height: "100%" }}>
-            <iframe
-              ref={iframeRef}
-              className="k4k-player-iframe"
-              src={embedSrc}
-              allowFullScreen
-              allow="autoplay; fullscreen; encrypted-media"
-              referrerPolicy="origin"
-            />
-            <div
-              ref={shieldRef}
-              onClick={handleShieldClick}
-              style={{
-                position: "absolute", inset: 0, zIndex: 5, cursor: "pointer",
-                background: "transparent",
-              }}
-            />
-          </div>
-        )}
+          )}
+        </div>
+
+        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+          <iframe
+            key={serverId}
+            className="k4k-player-iframe"
+            src={embedSrc}
+            allowFullScreen
+            allow="autoplay; fullscreen; encrypted-media"
+            referrerPolicy="origin"
+          />
+          <div
+            ref={shieldRef}
+            onClick={handleShieldClick}
+            style={{ position: "absolute", inset: 0, zIndex: 5, cursor: "pointer", background: "transparent" }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -439,6 +508,21 @@ export default function Kirito4k() {
   const [rows, setRows] = useState({});
   const [detail, setDetail] = useState(null);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [showAdblockAlert, setShowAdblockAlert] = useState(false);
+
+  // Show adblocker recommendation on first visit
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem("k4k_adblock_dismissed")) {
+        setShowAdblockAlert(true);
+      }
+    } catch {}
+  }, []);
+
+  const dismissAdblock = () => {
+    setShowAdblockAlert(false);
+    try { localStorage.setItem("k4k_adblock_dismissed", "1"); } catch {}
+  };
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40);
@@ -456,22 +540,6 @@ export default function Kirito4k() {
       if (trending?.results?.length) { setHero(trending.results.slice(0, 5)); setHeroIdx(0); }
     })();
   }, []);
-
-  // =====================================================
-  // 🔧 UNCOMMENT THIS to load "Recently Added" rows
-  //    from your embed API's latest endpoints
-  // =====================================================
-  // const [latestRows, setLatestRows] = useState({ movies: [], tv: [], episodes: [] });
-  // useEffect(() => {
-  //   (async () => {
-  //     const [movies, tv, episodes] = await Promise.all([
-  //       fetchLatestFromApi("movies", 1),
-  //       fetchLatestFromApi("tv", 1),
-  //       fetchLatestFromApi("episodes", 1),
-  //     ]);
-  //     setLatestRows({ movies, tv, episodes });
-  //   })();
-  // }, []);
 
   useEffect(() => {
     if (!hero?.length) return;
@@ -502,14 +570,11 @@ export default function Kirito4k() {
     ? { "Airing Now": rows.airingTv, "Top Rated TV": rows.topTv }
     : { "Trending This Week": rows.trending, "Now Playing": rows.nowPlaying, "Top Rated Movies": rows.topMovies, "Popular TV Shows": rows.airingTv, "Top Rated TV": rows.topTv, "Upcoming": rows.upcoming };
 
-  // 🔧 UNCOMMENT to merge your API's latest rows:
-  // if (latestRows.movies.length) filteredRows["Recently Added Movies"] = latestRows.movies;
-  // if (latestRows.tv.length) filteredRows["Recently Added Shows"] = latestRows.tv;
-
   return (
     <>
       <style>{css}</style>
       <div className="k4k-app">
+        {showAdblockAlert && <AdblockerAlert onDismiss={dismissAdblock} />}
         <nav className={`k4k-nav ${scrolled ? "scrolled" : ""}`}>
           <div className="k4k-logo" onClick={() => { setTab("home"); setSearch(""); setDetail(null); }}>KIRITO<span>4K</span></div>
           <div className="k4k-nav-links">
