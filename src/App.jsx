@@ -229,6 +229,35 @@ function Row({ title, items, type, onSelect }) {
 
 // --- PLAYER COMPONENT ---
 function Player({ playing, onClose }) {
+  const [clickShield, setClickShield] = useState(true);
+
+  // Block popups from parent window
+  useEffect(() => {
+    if (!playing) return;
+    const origOpen = window.open;
+    window.open = () => null;
+
+    const blockHandler = (e) => {
+      if (e.target.tagName === "A" && e.target.target === "_blank") {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener("click", blockHandler, true);
+
+    return () => {
+      window.open = origOpen;
+      document.removeEventListener("click", blockHandler, true);
+    };
+  }, [playing]);
+
+  // Auto-remove click shield after first click or 3 seconds
+  useEffect(() => {
+    if (!clickShield) return;
+    const timer = setTimeout(() => setClickShield(false), 3000);
+    return () => clearTimeout(timer);
+  }, [clickShield]);
+
   if (!playing) return null;
   let embedSrc = null;
   if (playing.type === "movie") embedSrc = EMBED_API.movie(playing.tmdbId);
@@ -249,7 +278,18 @@ function Player({ playing, onClose }) {
             </div>
           </div>
         ) : (
-          <iframe className="k4k-player-iframe" src={embedSrc} allowFullScreen allow="autoplay; fullscreen; encrypted-media" referrerPolicy="origin" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" />
+          <div style={{ position: "relative", width: "100%", height: "100%" }}>
+            <iframe className="k4k-player-iframe" src={embedSrc} allowFullScreen allow="autoplay; fullscreen; encrypted-media" referrerPolicy="origin" />
+            {clickShield && (
+              <div
+                onClick={(e) => { e.stopPropagation(); setClickShield(false); }}
+                style={{
+                  position: "absolute", inset: 0, zIndex: 5, cursor: "pointer",
+                  background: "transparent",
+                }}
+              />
+            )}
+          </div>
         )}
       </div>
     </div>
