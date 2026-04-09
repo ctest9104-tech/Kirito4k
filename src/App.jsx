@@ -10,7 +10,7 @@ const IMG = "https://image.tmdb.org/t/p";
 //    The ${tmdbId}, ${season}, ${episode} variables are
 //    passed automatically — they MUST be in the URLs
 // =====================================================
-const EMBED_DOMAIN = "vsembed.ru";
+const EMBED_DOMAIN = "https://vsembed.ru";
 const EMBED_API = {
   movie:   (tmdbId)                  => `${EMBED_DOMAIN}/embed/movie/${tmdbId}`,
   tv:      (tmdbId)                  => `${EMBED_DOMAIN}/embed/tv/${tmdbId}`,
