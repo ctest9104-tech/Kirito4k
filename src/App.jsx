@@ -304,10 +304,24 @@ function Row({ title, items, type, onSelect }) {
 }
 
 // --- PLAYER WITH MULTI-SERVER ---
-// --- AD BLOCK STRATEGIES ---
-// CSS injected around iframe to nuke known overlay patterns
+// --- AD BLOCKING ---
+// Known ad/tracker domains to block
+const AD_DOMAINS = [
+  "doubleclick.net","googlesyndication.com","googleadservices.com",
+  "adservice.google.com","pagead2.googlesyndication.com",
+  "popads.net","popcash.net","popunder.net","propellerads.com",
+  "adsterra.com","exoclick.com","juicyads.com","trafficjunky.com",
+  "hilltopads.com","clickadu.com","monetag.com","a-ads.com",
+  "ad-maven.com","admaven.com","richpush.co","pushground.com",
+  "evadav.com","galaksion.com","clickaine.com","onclicka.com",
+  "onclickads.net","pushnotifications.com","pushengage.com",
+  "revenuehits.com","bidvertiser.com","infolinks.com",
+  "mgid.com","taboola.com","outbrain.com","revcontent.com",
+  "s.magsrv.com","syndication.realsrv.com","tsyndicate.com",
+];
+
+// CSS to nuke overlay patterns on parent page
 const AD_NUKE_CSS = `
-  /* Z-index surgical strike — kill invisible overlay divs */
   .k4k-player-wrap div[class*="overlay"],
   .k4k-player-wrap div[style*="z-index: 2147483647"],
   .k4k-player-wrap div[style*="z-index:2147483647"],
@@ -329,18 +343,22 @@ const AD_NUKE_CSS = `
 function Player({ playing, onClose }) {
   const [serverId, setServerId] = useState(getStoredServer);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const playerRef = useRef(null);
-  const iframeRef = useRef(null);
 
   const server = SERVERS.find(s => s.id === serverId) || SERVERS[0];
 
-  // window.open Nullifier + blur refocus
+  // Lock body scroll when player is open
+  useEffect(() => {
+    if (!playing) return;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, [playing]);
+
+  // window.open nullifier + blur refocus
   useEffect(() => {
     if (!playing) return;
     const origOpen = window.open;
     window.open = function() {
-      console.log("[Kirito4K] Blocked popup attempt");
+      console.log("[Kirito4K] Blocked popup");
       return null;
     };
     const blockLinks = (e) => {
@@ -350,7 +368,6 @@ function Player({ playing, onClose }) {
     document.addEventListener("click", blockLinks, true);
     const blockUnload = (e) => { e.stopImmediatePropagation(); };
     window.addEventListener("beforeunload", blockUnload, true);
-    // Refocus when popup steals focus
     const onBlur = () => {
       setTimeout(() => { try { window.focus(); } catch(e){} }, 100);
     };
@@ -363,52 +380,95 @@ function Player({ playing, onClose }) {
     };
   }, [playing]);
 
-  // Auto-fullscreen the player container on open
-  useEffect(() => {
-    if (!playing || !playerRef.current) return;
-    const el = playerRef.current;
-    const enterFS = () => {
-      try {
-        if (el.requestFullscreen) el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-        else if (el.msRequestFullscreen) el.msRequestFullscreen();
-      } catch(e) { console.log("[Kirito4K] Fullscreen not available"); }
-    };
-    // Small delay to let iframe mount
-    const t = setTimeout(enterFS, 300);
-    return () => clearTimeout(t);
-  }, [playing, serverId]);
-
-  // Track fullscreen state
-  useEffect(() => {
-    const onFSChange = () => {
-      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-      setIsFullscreen(!!fsEl);
-    };
-    document.addEventListener("fullscreenchange", onFSChange);
-    document.addEventListener("webkitfullscreenchange", onFSChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", onFSChange);
-      document.removeEventListener("webkitfullscreenchange", onFSChange);
-    };
-  }, []);
-
-  // Exit fullscreen on close
-  const handleClose = () => {
-    try {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
-    } catch(e) {}
-    onClose();
-  };
-
-  // ESC key to close
+  // Lightweight ad blocker — MutationObserver that kills injected ad elements
   useEffect(() => {
     if (!playing) return;
-    const onKey = (e) => { if (e.key === "Escape") handleClose(); };
+
+    const isAdElement = (el) => {
+      if (!el || !el.tagName) return false;
+      const tag = el.tagName.toLowerCase();
+      const src = el.src || el.href || "";
+      const cls = el.className || "";
+      const id = el.id || "";
+
+      // Check if src matches known ad domain
+      if (src && AD_DOMAINS.some(d => src.includes(d))) return true;
+
+      // Check for common ad patterns in class/id
+      const patterns = /\b(ad[s_-]?|pop(up|under|over)|banner|sponsor|tracker|click-?layer|overlay-?ad)\b/i;
+      if (patterns.test(cls) || patterns.test(id)) return true;
+
+      // Invisible full-screen overlays (the hidden click hijackers)
+      if (tag === "div" || tag === "a") {
+        const style = el.style;
+        if (style && style.position === "fixed" && style.zIndex > 9000) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > window.innerWidth * 0.5 && rect.height > window.innerHeight * 0.5) {
+            if (!el.querySelector("video") && !el.querySelector("iframe")) return true;
+          }
+        }
+      }
+
+      // Script tags from ad domains
+      if (tag === "script" && AD_DOMAINS.some(d => src.includes(d))) return true;
+
+      // Iframes from ad domains
+      if (tag === "iframe" && src && AD_DOMAINS.some(d => src.includes(d))) return true;
+
+      return false;
+    };
+
+    // Kill existing ad elements
+    const sweep = () => {
+      document.querySelectorAll("script, iframe, div, a").forEach(el => {
+        if (isAdElement(el)) {
+          el.remove();
+          console.log("[Kirito4K] Removed ad element:", el.tagName, el.src || el.className);
+        }
+      });
+    };
+
+    // Watch for dynamically injected ad elements
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach(m => {
+        m.addedNodes.forEach(node => {
+          if (node.nodeType === 1) {
+            if (isAdElement(node)) {
+              node.remove();
+              console.log("[Kirito4K] Blocked injected ad:", node.tagName);
+            }
+            // Also check children
+            if (node.querySelectorAll) {
+              node.querySelectorAll("script, iframe, div, a").forEach(child => {
+                if (isAdElement(child)) {
+                  child.remove();
+                  console.log("[Kirito4K] Blocked nested ad:", child.tagName);
+                }
+              });
+            }
+          }
+        });
+      });
+    });
+
+    sweep();
+    observer.observe(document.body, { childList: true, subtree: true });
+    // Re-sweep periodically (some ads inject on a delay)
+    const interval = setInterval(sweep, 2000);
+
+    return () => {
+      observer.disconnect();
+      clearInterval(interval);
+    };
+  }, [playing]);
+
+  // ESC to close
+  useEffect(() => {
+    if (!playing) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [playing]);
+  }, [playing, onClose]);
 
   const switchServer = (id) => {
     setServerId(id);
@@ -423,18 +483,19 @@ function Player({ playing, onClose }) {
   else if (playing.episode) embedSrc = server.episodeUrl(playing.tmdbId, playing.season, playing.episode);
   else embedSrc = server.tvUrl(playing.tmdbId);
 
+  // CSS-based fullscreen — not using Fullscreen API so tapping can't exit it
   return (
-    <div className="k4k-player-modal" onClick={handleClose}>
+    <div style={{ position:"fixed", inset:0, zIndex:300, background:"#000" }} onClick={e => e.stopPropagation()}>
       <style>{AD_NUKE_CSS}</style>
-      <div ref={playerRef} className="k4k-player-box" onClick={e => e.stopPropagation()} style={isFullscreen ? { width:"100vw", maxWidth:"100vw", height:"100vh", borderRadius:0, aspectRatio:"unset" } : undefined}>
-        <button className="k4k-player-close" onClick={handleClose}><Icons.Close /></button>
 
-        <div className="k4k-server-bar" onClick={e => e.stopPropagation()}>
+      {/* Top bar: server selector + close */}
+      <div style={{ position:"absolute", top:0, left:0, right:0, zIndex:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)", pointerEvents:"none" }}>
+        <div style={{ display:"flex", gap:8, alignItems:"center", pointerEvents:"auto" }} onClick={e => e.stopPropagation()}>
           <button className="k4k-server-btn" onClick={() => setShowDropdown(!showDropdown)}>
             <Icons.Server /> {server.name} ▾
           </button>
           {showDropdown && (
-            <div className="k4k-server-dropdown">
+            <div className="k4k-server-dropdown" style={{ position:"absolute", top:"100%", left:0, marginTop:4 }}>
               {SERVERS.map(s => (
                 <div key={s.id} className={`k4k-server-item ${s.id === serverId ? "active" : ""}`} onClick={() => switchServer(s.id)}>
                   {s.name}
@@ -444,18 +505,20 @@ function Player({ playing, onClose }) {
             </div>
           )}
         </div>
+        <button className="k4k-player-close" style={{ position:"relative", top:"auto", right:"auto", pointerEvents:"auto" }} onClick={onClose}><Icons.Close /></button>
+      </div>
 
-        <div className="k4k-player-wrap" style={{ position: "relative", width: "100%", height: "100%" }}>
-          <iframe
-            ref={iframeRef}
-            key={serverId}
-            className="k4k-player-iframe"
-            src={embedSrc}
-            allowFullScreen
-            allow="autoplay; fullscreen; encrypted-media"
-            referrerPolicy="origin"
-          />
-        </div>
+      {/* Player iframe — fills entire screen */}
+      <div className="k4k-player-wrap" style={{ width:"100%", height:"100%" }}>
+        <iframe
+          key={serverId}
+          className="k4k-player-iframe"
+          src={embedSrc}
+          allowFullScreen
+          allow="autoplay; fullscreen; encrypted-media"
+          referrerPolicy="origin"
+          style={{ width:"100%", height:"100%", border:"none" }}
+        />
       </div>
     </div>
   );
