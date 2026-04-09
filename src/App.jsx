@@ -1,20 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const TMDB_KEY = "2dca580c2a14b55200e784d157207b4d";
+const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIzMTVjYWYzNjkxNTc1OGIwMDFlOTYwMzg5OWJlOTY3MCIsIm5iZiI6MTc3NTcxMjQyNy44MTksInN1YiI6IjY5ZDczOGFiNTIzNzlkODZhY2Q3NzE4YSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.ID34IJ0N4KSVI4UIziKBwiPR2NQlLAnblAxZC48GWS8";
 const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
 
 // =====================================================
-// 🔧 EMBED API CONFIG — Replace these placeholder URLs
-//    with your actual embed API endpoints
+// 🔧 EMBED API CONFIG
+//    Replace YOUR_EMBED_DOMAIN with your embed provider
+//    The ${tmdbId}, ${season}, ${episode} variables are
+//    passed automatically — they MUST be in the URLs
 // =====================================================
+const EMBED_DOMAIN = "vsembed.ru";
 const EMBED_API = {
-  movie: (tmdbId) => `https://vidsrc-embed.ru/embed/movie`,
-  tv: (tmdbId) => `https://vidsrc-embed.ru/embed/tv`,
-  episode: (tmdbId, season, episode) => `https://vidsrc-embed.ru/embed/tv`,
-  latestMovies: (page) => `https://vidsrc-embed.ru/tvshows/latest/page-1.json`,
-  latestShows: (page) => `https://vidsrc-embed.ru/tvshows/latest/page-1.json`,
-  latestEpisodes: (page) => `https://vidsrc-embed.ru/episodes/latest/page-1.json`,
+  movie:   (tmdbId)                  => `${EMBED_DOMAIN}/embed/movie/${tmdbId}`,
+  tv:      (tmdbId)                  => `${EMBED_DOMAIN}/embed/tv/${tmdbId}`,
+  episode: (tmdbId, season, episode) => `${EMBED_DOMAIN}/embed/tv/${tmdbId}/${season}/${episode}`,
+  latestMovies:   (page) => `${EMBED_DOMAIN}/movies/latest/page-${page}.json`,
+  latestShows:    (page) => `${EMBED_DOMAIN}/tvshows/latest/page-${page}.json`,
+  latestEpisodes: (page) => `${EMBED_DOMAIN}/episodes/latest/page-${page}.json`,
 };
 
 // --- ICONS ---
@@ -164,9 +167,16 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 // --- HELPERS ---
 async function tmdbFetch(path, params = {}) {
   const url = new URL(`${TMDB}${path}`);
-  url.searchParams.set("api_key", TMDB_KEY);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  try { const r = await fetch(url); return await r.json(); } catch { return null; }
+  try {
+    const r = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${TMDB_TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    });
+    return await r.json();
+  } catch { return null; }
 }
 function posterUrl(path, size = "w500") { return path ? `${IMG}/${size}${path}` : ""; }
 function backdropUrl(path) { return path ? `${IMG}/original${path}` : ""; }
@@ -224,7 +234,7 @@ function Player({ playing, onClose }) {
   if (playing.type === "movie") embedSrc = EMBED_API.movie(playing.tmdbId);
   else if (playing.episode) embedSrc = EMBED_API.episode(playing.tmdbId, playing.season, playing.episode);
   else embedSrc = EMBED_API.tv(playing.tmdbId);
-  const isPlaceholder = embedSrc.includes("YOUR_EMBED_API") || embedSrc.includes("YOUR_API");
+  const isPlaceholder = embedSrc.includes("YOUR_EMBED_DOMAIN");
   return (
     <div className="k4k-player-modal" onClick={onClose}>
       <div className="k4k-player-box" onClick={e => e.stopPropagation()}>
