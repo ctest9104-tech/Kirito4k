@@ -11,6 +11,13 @@ const IMG = "https://image.tmdb.org/t/p";
 // =====================================================
 const SERVERS = [
   {
+    id: "vidlink",
+    name: "VidLink ★ Ad-Free",
+    movieUrl:   (id) => `https://vidlink.pro/movie/${id}`,
+    tvUrl:      (id) => `https://vidlink.pro/tv/${id}`,
+    episodeUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}`,
+  },
+  {
     id: "vidsrc",
     name: "VidSrc",
     movieUrl:   (id) => `https://vsrc.su/embed/movie?tmdb=${id}`,
@@ -18,11 +25,11 @@ const SERVERS = [
     episodeUrl: (id, s, e) => `https://vsrc.su/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
   },
   {
-    id: "superembed",
-    name: "SuperEmbed",
-    movieUrl:   (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
-    tvUrl:      (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
-    episodeUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
+    id: "embedsu",
+    name: "Embed.su",
+    movieUrl:   (id) => `https://embed.su/embed/movie/${id}`,
+    tvUrl:      (id) => `https://embed.su/embed/tv/${id}`,
+    episodeUrl: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}`,
   },
   {
     id: "autoembed",
@@ -32,11 +39,11 @@ const SERVERS = [
     episodeUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`,
   },
   {
-    id: "111movies",
-    name: "111Movies",
-    movieUrl:   (id) => `https://111movies.com/movie/${id}`,
-    tvUrl:      (id) => `https://111movies.com/tv/${id}`,
-    episodeUrl: (id, s, e) => `https://111movies.com/tv/${id}/${s}/${e}`,
+    id: "superembed",
+    name: "SuperEmbed",
+    movieUrl:   (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+    tvUrl:      (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+    episodeUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
   },
   {
     id: "vidnest",
@@ -45,10 +52,17 @@ const SERVERS = [
     tvUrl:      (id) => `https://vidnest.fun/tv/${id}`,
     episodeUrl: (id, s, e) => `https://vidnest.fun/tv/${id}/${s}/${e}`,
   },
+  {
+    id: "vidsrcicu",
+    name: "VidSrc.icu",
+    movieUrl:   (id) => `https://vidsrc.icu/embed/movie/${id}`,
+    tvUrl:      (id) => `https://vidsrc.icu/embed/tv/${id}`,
+    episodeUrl: (id, s, e) => `https://vidsrc.icu/embed/tv/${id}/${s}/${e}`,
+  },
 ];
 
 function getStoredServer() {
-  try { return localStorage.getItem("k4k_server") || "vidsrc"; } catch { return "vidsrc"; }
+  try { return localStorage.getItem("k4k_server") || "vidlink"; } catch { return "vidlink"; }
 }
 function storeServer(id) {
   try { localStorage.setItem("k4k_server", id); } catch {}
@@ -72,6 +86,8 @@ const Icons = {
   Shield: () => <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>,
   Check: () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   External: () => <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  Expand: () => <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  Minimize: () => <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
 };
 
 const css = `
@@ -483,7 +499,22 @@ function Player({ playing, onClose }) {
   else if (playing.episode) embedSrc = server.episodeUrl(playing.tmdbId, playing.season, playing.episode);
   else embedSrc = server.tvUrl(playing.tmdbId);
 
-  // CSS-based fullscreen — not using Fullscreen API so tapping can't exit it
+  const toggleRealFullscreen = () => {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      try {
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } catch(e) {}
+    } else {
+      try {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } catch(e) {}
+    }
+  };
+
+  // Always fills viewport via CSS (can't be exited by tapping)
   return (
     <div style={{ position:"fixed", inset:0, zIndex:300, background:"#000" }} onClick={e => e.stopPropagation()}>
       <style>{AD_NUKE_CSS}</style>
@@ -506,6 +537,18 @@ function Player({ playing, onClose }) {
           )}
         </div>
         <button className="k4k-player-close" style={{ position:"relative", top:"auto", right:"auto", pointerEvents:"auto" }} onClick={onClose}><Icons.Close /></button>
+      </div>
+
+      {/* Bottom bar: fullscreen toggle */}
+      <div style={{ position:"absolute", bottom:0, left:0, right:0, zIndex:10, display:"flex", justifyContent:"flex-end", alignItems:"center", padding:"12px 16px", background:"linear-gradient(to top, rgba(0,0,0,0.8), transparent)", pointerEvents:"none" }}>
+        <button
+          onClick={toggleRealFullscreen}
+          style={{ pointerEvents:"auto", display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:8, background:"rgba(255,255,255,0.1)", backdropFilter:"blur(8px)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"'DM Sans',sans-serif", transition:"all 0.2s" }}
+          onMouseEnter={e => { e.target.style.background = "rgba(255,255,255,0.2)"; }}
+          onMouseLeave={e => { e.target.style.background = "rgba(255,255,255,0.1)"; }}
+        >
+          <Icons.Expand /> Fullscreen
+        </button>
       </div>
 
       {/* Player iframe — fills entire screen */}
