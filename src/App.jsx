@@ -13,6 +13,7 @@ const SERVERS = [
   {
     id: "vidlink",
     name: "VidLink ★ Ad-Free",
+    sandbox: true,
     movieUrl:   (id) => `https://vidlink.pro/movie/${id}`,
     tvUrl:      (id) => `https://vidlink.pro/tv/${id}`,
     episodeUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}`,
@@ -20,6 +21,7 @@ const SERVERS = [
   {
     id: "vidsrc",
     name: "VidSrc",
+    sandbox: false,
     movieUrl:   (id) => `https://vsrc.su/embed/movie?tmdb=${id}`,
     tvUrl:      (id) => `https://vsrc.su/embed/tv?tmdb=${id}`,
     episodeUrl: (id, s, e) => `https://vsrc.su/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
@@ -27,6 +29,7 @@ const SERVERS = [
   {
     id: "embedsu",
     name: "Embed.su",
+    sandbox: true,
     movieUrl:   (id) => `https://embed.su/embed/movie/${id}`,
     tvUrl:      (id) => `https://embed.su/embed/tv/${id}`,
     episodeUrl: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}`,
@@ -34,6 +37,7 @@ const SERVERS = [
   {
     id: "autoembed",
     name: "AutoEmbed",
+    sandbox: true,
     movieUrl:   (id) => `https://player.autoembed.cc/embed/movie/${id}`,
     tvUrl:      (id) => `https://player.autoembed.cc/embed/tv/${id}`,
     episodeUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`,
@@ -41,6 +45,7 @@ const SERVERS = [
   {
     id: "superembed",
     name: "SuperEmbed",
+    sandbox: false,
     movieUrl:   (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
     tvUrl:      (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
     episodeUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
@@ -48,6 +53,7 @@ const SERVERS = [
   {
     id: "vidnest",
     name: "VidNest",
+    sandbox: false,
     movieUrl:   (id) => `https://vidnest.fun/movie/${id}`,
     tvUrl:      (id) => `https://vidnest.fun/tv/${id}`,
     episodeUrl: (id, s, e) => `https://vidnest.fun/tv/${id}/${s}/${e}`,
@@ -55,6 +61,7 @@ const SERVERS = [
   {
     id: "vidsrcicu",
     name: "VidSrc.icu",
+    sandbox: false,
     movieUrl:   (id) => `https://vidsrc.icu/embed/movie/${id}`,
     tvUrl:      (id) => `https://vidsrc.icu/embed/tv/${id}`,
     episodeUrl: (id, s, e) => `https://vidsrc.icu/embed/tv/${id}/${s}/${e}`,
@@ -359,8 +366,27 @@ const AD_NUKE_CSS = `
 function Player({ playing, onClose }) {
   const [serverId, setServerId] = useState(getStoredServer);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [sandboxOff, setSandboxOff] = useState(false);
+  const iframeRef = useRef(null);
 
   const server = SERVERS.find(s => s.id === serverId) || SERVERS[0];
+
+  // Auto-fallback: if sandbox breaks the player, disable it after 8s
+  useEffect(() => {
+    if (!playing || !server.sandbox || sandboxOff) return;
+    const timer = setTimeout(() => {
+      console.log("[Kirito4K] Sandbox may have broken playback — disabling for", server.name);
+      setSandboxOff(true);
+    }, 8000);
+    // If iframe loads successfully, cancel the fallback
+    const iframe = iframeRef.current;
+    const onLoad = () => clearTimeout(timer);
+    if (iframe) iframe.addEventListener("load", onLoad);
+    return () => {
+      clearTimeout(timer);
+      if (iframe) iframe.removeEventListener("load", onLoad);
+    };
+  }, [playing, serverId, sandboxOff, server.sandbox]);
 
   // Lock body scroll when player is open
   useEffect(() => {
@@ -490,6 +516,7 @@ function Player({ playing, onClose }) {
     setServerId(id);
     storeServer(id);
     setShowDropdown(false);
+    setSandboxOff(false);
   };
 
   if (!playing) return null;
@@ -499,22 +526,10 @@ function Player({ playing, onClose }) {
   else if (playing.episode) embedSrc = server.episodeUrl(playing.tmdbId, playing.season, playing.episode);
   else embedSrc = server.tvUrl(playing.tmdbId);
 
-  const toggleRealFullscreen = () => {
-    const el = document.documentElement;
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      try {
-        if (el.requestFullscreen) el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      } catch(e) {}
-    } else {
-      try {
-        if (document.exitFullscreen) document.exitFullscreen();
-        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-      } catch(e) {}
-    }
-  };
+  // Use sandbox if server supports it and it hasn't failed
+  const useSandbox = server.sandbox && !sandboxOff;
+  const sandboxValue = "allow-forms allow-scripts allow-same-origin allow-presentation allow-orientation-lock allow-pointer-lock";
 
-  // Always fills viewport via CSS (can't be exited by tapping)
   return (
     <div style={{ position:"fixed", inset:0, zIndex:300, background:"#000" }} onClick={e => e.stopPropagation()}>
       <style>{AD_NUKE_CSS}</style>
@@ -525,12 +540,20 @@ function Player({ playing, onClose }) {
           <button className="k4k-server-btn" onClick={() => setShowDropdown(!showDropdown)}>
             <Icons.Server /> {server.name} ▾
           </button>
+          {useSandbox && (
+            <div style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:12, background:"rgba(34,197,94,0.15)", border:"1px solid rgba(34,197,94,0.3)", fontSize:10, fontWeight:700, color:"var(--green)" }}>
+              <Icons.Shield /> Ads Blocked
+            </div>
+          )}
           {showDropdown && (
             <div className="k4k-server-dropdown" style={{ position:"absolute", top:"100%", left:0, marginTop:4 }}>
               {SERVERS.map(s => (
                 <div key={s.id} className={`k4k-server-item ${s.id === serverId ? "active" : ""}`} onClick={() => switchServer(s.id)}>
-                  {s.name}
-                  {s.id === serverId && <div className="k4k-server-dot" />}
+                  <span>{s.name}</span>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    {s.sandbox && <span style={{ fontSize:9, color:"var(--green)", fontWeight:700 }}>AD-BLOCK</span>}
+                    {s.id === serverId && <div className="k4k-server-dot" />}
+                  </div>
                 </div>
               ))}
             </div>
@@ -539,28 +562,18 @@ function Player({ playing, onClose }) {
         <button className="k4k-player-close" style={{ position:"relative", top:"auto", right:"auto", pointerEvents:"auto" }} onClick={onClose}><Icons.Close /></button>
       </div>
 
-      {/* Bottom bar: fullscreen toggle */}
-      <div style={{ position:"absolute", bottom:0, left:0, right:0, zIndex:10, display:"flex", justifyContent:"flex-end", alignItems:"center", padding:"12px 16px", background:"linear-gradient(to top, rgba(0,0,0,0.8), transparent)", pointerEvents:"none" }}>
-        <button
-          onClick={toggleRealFullscreen}
-          style={{ pointerEvents:"auto", display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:8, background:"rgba(255,255,255,0.1)", backdropFilter:"blur(8px)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"'DM Sans',sans-serif", transition:"all 0.2s" }}
-          onMouseEnter={e => { e.target.style.background = "rgba(255,255,255,0.2)"; }}
-          onMouseLeave={e => { e.target.style.background = "rgba(255,255,255,0.1)"; }}
-        >
-          <Icons.Expand /> Fullscreen
-        </button>
-      </div>
-
       {/* Player iframe — fills entire screen */}
       <div className="k4k-player-wrap" style={{ width:"100%", height:"100%" }}>
         <iframe
-          key={serverId}
+          ref={iframeRef}
+          key={`${serverId}-${useSandbox}`}
           className="k4k-player-iframe"
           src={embedSrc}
           allowFullScreen
           allow="autoplay; fullscreen; encrypted-media"
           referrerPolicy="origin"
           style={{ width:"100%", height:"100%", border:"none" }}
+          {...(useSandbox ? { sandbox: sandboxValue } : {})}
         />
       </div>
     </div>
