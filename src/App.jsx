@@ -329,10 +329,13 @@ const AD_NUKE_CSS = `
 function Player({ playing, onClose }) {
   const [serverId, setServerId] = useState(getStoredServer);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const playerRef = useRef(null);
+  const iframeRef = useRef(null);
 
   const server = SERVERS.find(s => s.id === serverId) || SERVERS[0];
 
-  // Method 2: window.open Nullifier
+  // window.open Nullifier + blur refocus
   useEffect(() => {
     if (!playing) return;
     const origOpen = window.open;
@@ -347,39 +350,65 @@ function Player({ playing, onClose }) {
     document.addEventListener("click", blockLinks, true);
     const blockUnload = (e) => { e.stopImmediatePropagation(); };
     window.addEventListener("beforeunload", blockUnload, true);
+    // Refocus when popup steals focus
+    const onBlur = () => {
+      setTimeout(() => { try { window.focus(); } catch(e){} }, 100);
+    };
+    window.addEventListener("blur", onBlur);
     return () => {
       window.open = origOpen;
       document.removeEventListener("click", blockLinks, true);
       window.removeEventListener("beforeunload", blockUnload, true);
+      window.removeEventListener("blur", onBlur);
     };
   }, [playing]);
 
-  // Method 4: Smart click shield
-  // Shield absorbs the FIRST click (ad trigger), then stays OFF.
-  // Only re-arms if a popup actually gets through (detected via blur).
-  const [shieldOn, setShieldOn] = useState(true);
+  // Auto-fullscreen the player container on open
+  useEffect(() => {
+    if (!playing || !playerRef.current) return;
+    const el = playerRef.current;
+    const enterFS = () => {
+      try {
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        else if (el.msRequestFullscreen) el.msRequestFullscreen();
+      } catch(e) { console.log("[Kirito4K] Fullscreen not available"); }
+    };
+    // Small delay to let iframe mount
+    const t = setTimeout(enterFS, 300);
+    return () => clearTimeout(t);
+  }, [playing, serverId]);
 
-  // Re-arm shield if popup steals focus
+  // Track fullscreen state
+  useEffect(() => {
+    const onFSChange = () => {
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      setIsFullscreen(!!fsEl);
+    };
+    document.addEventListener("fullscreenchange", onFSChange);
+    document.addEventListener("webkitfullscreenchange", onFSChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFSChange);
+      document.removeEventListener("webkitfullscreenchange", onFSChange);
+    };
+  }, []);
+
+  // Exit fullscreen on close
+  const handleClose = () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
+    } catch(e) {}
+    onClose();
+  };
+
+  // ESC key to close
   useEffect(() => {
     if (!playing) return;
-    const onBlur = () => {
-      // A popup stole focus — re-arm shield and pull focus back
-      setShieldOn(true);
-      setTimeout(() => { try { window.focus(); } catch(e){} }, 50);
-    };
-    window.addEventListener("blur", onBlur);
-    return () => window.removeEventListener("blur", onBlur);
+    const onKey = (e) => { if (e.key === "Escape") handleClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [playing]);
-
-  // Reset shield when switching servers
-  useEffect(() => { setShieldOn(true); }, [serverId]);
-
-  const handleShieldClick = useCallback((e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    // First click absorbed — now disable shield so player works normally
-    setShieldOn(false);
-  }, []);
 
   const switchServer = (id) => {
     setServerId(id);
@@ -395,10 +424,10 @@ function Player({ playing, onClose }) {
   else embedSrc = server.tvUrl(playing.tmdbId);
 
   return (
-    <div className="k4k-player-modal" onClick={onClose}>
+    <div className="k4k-player-modal" onClick={handleClose}>
       <style>{AD_NUKE_CSS}</style>
-      <div className="k4k-player-box" onClick={e => e.stopPropagation()}>
-        <button className="k4k-player-close" onClick={onClose}><Icons.Close /></button>
+      <div ref={playerRef} className="k4k-player-box" onClick={e => e.stopPropagation()} style={isFullscreen ? { width:"100vw", maxWidth:"100vw", height:"100vh", borderRadius:0, aspectRatio:"unset" } : undefined}>
+        <button className="k4k-player-close" onClick={handleClose}><Icons.Close /></button>
 
         <div className="k4k-server-bar" onClick={e => e.stopPropagation()}>
           <button className="k4k-server-btn" onClick={() => setShowDropdown(!showDropdown)}>
@@ -418,6 +447,7 @@ function Player({ playing, onClose }) {
 
         <div className="k4k-player-wrap" style={{ position: "relative", width: "100%", height: "100%" }}>
           <iframe
+            ref={iframeRef}
             key={serverId}
             className="k4k-player-iframe"
             src={embedSrc}
@@ -425,12 +455,6 @@ function Player({ playing, onClose }) {
             allow="autoplay; fullscreen; encrypted-media"
             referrerPolicy="origin"
           />
-          {shieldOn && (
-            <div
-              onClick={handleShieldClick}
-              style={{ position: "absolute", inset: 0, zIndex: 5, cursor: "pointer", background: "transparent" }}
-            />
-          )}
         </div>
       </div>
     </div>
