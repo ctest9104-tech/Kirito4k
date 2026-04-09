@@ -229,34 +229,67 @@ function Row({ title, items, type, onSelect }) {
 
 // --- PLAYER COMPONENT ---
 function Player({ playing, onClose }) {
-  const [clickShield, setClickShield] = useState(true);
+  const iframeRef = useRef(null);
+  const shieldRef = useRef(null);
+  const [shieldActive, setShieldActive] = useState(true);
 
-  // Block popups from parent window
+  // Layer 1: Block window.open + catch blur (new tab opened)
   useEffect(() => {
     if (!playing) return;
     const origOpen = window.open;
     window.open = () => null;
 
-    const blockHandler = (e) => {
-      if (e.target.tagName === "A" && e.target.target === "_blank") {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+    // Detect when iframe opens a new tab (window loses focus)
+    let focusCount = 0;
+    const onBlur = () => {
+      focusCount++;
+      // If we lose focus more than once quickly, ads are opening tabs
+      // Refocus back to our window
+      setTimeout(() => { try { window.focus(); } catch(e){} }, 50);
     };
-    document.addEventListener("click", blockHandler, true);
+    window.addEventListener("blur", onBlur);
+
+    // Block any anchor clicks on the parent page
+    const blockLinks = (e) => {
+      const a = e.target.closest?.("a[target='_blank']");
+      if (a) { e.preventDefault(); e.stopPropagation(); }
+    };
+    document.addEventListener("click", blockLinks, true);
+
+    // Block beforeunload hijacks
+    const blockUnload = (e) => { e.stopImmediatePropagation(); };
+    window.addEventListener("beforeunload", blockUnload, true);
 
     return () => {
       window.open = origOpen;
-      document.removeEventListener("click", blockHandler, true);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("click", blockLinks, true);
+      window.removeEventListener("beforeunload", blockUnload, true);
     };
   }, [playing]);
 
-  // Auto-remove click shield after first click or 3 seconds
+  // Layer 2: Smart click shield — absorbs first click, passes through second
+  // The shield uses pointer-events toggling: on click it goes transparent
+  // for 150ms to let the real click reach the player, then reactivates
+  const handleShieldClick = useCallback((e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (shieldRef.current) {
+      shieldRef.current.style.pointerEvents = "none";
+      setTimeout(() => {
+        if (shieldRef.current) shieldRef.current.style.pointerEvents = "auto";
+      }, 300);
+    }
+  }, []);
+
+  // Layer 3: Auto-disable shield after 5s so normal playback controls work,
+  // but re-enable on each new click cycle
   useEffect(() => {
-    if (!clickShield) return;
-    const timer = setTimeout(() => setClickShield(false), 3000);
-    return () => clearTimeout(timer);
-  }, [clickShield]);
+    if (!shieldActive) {
+      const timer = setTimeout(() => setShieldActive(true), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [shieldActive]);
 
   if (!playing) return null;
   let embedSrc = null;
@@ -279,16 +312,23 @@ function Player({ playing, onClose }) {
           </div>
         ) : (
           <div style={{ position: "relative", width: "100%", height: "100%" }}>
-            <iframe className="k4k-player-iframe" src={embedSrc} allowFullScreen allow="autoplay; fullscreen; encrypted-media" referrerPolicy="origin" />
-            {clickShield && (
-              <div
-                onClick={(e) => { e.stopPropagation(); setClickShield(false); }}
-                style={{
-                  position: "absolute", inset: 0, zIndex: 5, cursor: "pointer",
-                  background: "transparent",
-                }}
-              />
-            )}
+            <iframe
+              ref={iframeRef}
+              className="k4k-player-iframe"
+              src={embedSrc}
+              allowFullScreen
+              allow="autoplay; fullscreen; encrypted-media"
+              referrerPolicy="origin"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-modals allow-orientation-lock allow-pointer-lock allow-top-navigation-by-user-activation"
+            />
+            <div
+              ref={shieldRef}
+              onClick={handleShieldClick}
+              style={{
+                position: "absolute", inset: 0, zIndex: 5, cursor: "pointer",
+                background: "transparent",
+              }}
+            />
           </div>
         )}
       </div>
