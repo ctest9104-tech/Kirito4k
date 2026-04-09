@@ -249,7 +249,7 @@ function Player({ playing, onClose }) {
             </div>
           </div>
         ) : (
-          <iframe className="k4k-player-iframe" src={embedSrc} allowFullScreen allow="autoplay; fullscreen; encrypted-media" referrerPolicy="origin" />
+          <iframe className="k4k-player-iframe" src={embedSrc} allowFullScreen allow="autoplay; fullscreen; encrypted-media" referrerPolicy="origin" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" />
         )}
       </div>
     </div>
