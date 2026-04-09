@@ -319,7 +319,6 @@ function Player({ playing, onClose }) {
               allowFullScreen
               allow="autoplay; fullscreen; encrypted-media"
               referrerPolicy="origin"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-modals allow-orientation-lock allow-pointer-lock allow-top-navigation-by-user-activation"
             />
             <div
               ref={shieldRef}
