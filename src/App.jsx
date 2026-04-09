@@ -9,12 +9,12 @@ const IMG = "https://image.tmdb.org/t/p";
 //    with your actual embed API endpoints
 // =====================================================
 const EMBED_API = {
-  movie: (tmdbId) => `https://vsembed.ru/embed/${imdbId}`,
-  tv: (tmdbId) => `https://vsembed.ru/embed/${imdbId}`,
-  episode: (tmdbId, season, episode) => `https://vsembed.ru/embed/${imdbId}/${season}-${episode}`,
-  latestMovies: (page) => `https://YOUR_API.com/latest/movies/${page}.json`,
-  latestShows: (page) => `https://YOUR_API.com/latest/tv/${page}.json`,
-  latestEpisodes: (page) => `https://YOUR_API.com/latest/episodes/${page}.json`,
+  movie: (tmdbId) => `https://vidsrc-embed.ru/embed/movie`,
+  tv: (tmdbId) => `https://vidsrc-embed.ru/embed/tv`,
+  episode: (tmdbId, season, episode) => `https://vidsrc-embed.ru/embed/tv`,
+  latestMovies: (page) => `https://vidsrc-embed.ru/tvshows/latest/page-1.json`,
+  latestShows: (page) => `https://vidsrc-embed.ru/tvshows/latest/page-1.json`,
+  latestEpisodes: (page) => `https://vidsrc-embed.ru/episodes/latest/page-1.json`,
 };
 
 // --- ICONS ---
