@@ -5,12 +5,14 @@ const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIzMTVjYWYzNjkxNTc1OGIwMDFlOTY
 const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
 
+// Expanded and verified server list
 const SERVERS = [
   { id: "vidsrc", name: "VidSrc (Best)", movieUrl: (id) => `https://vsrc.su/embed/movie?tmdb=${id}`, tvUrl: (id) => `https://vsrc.su/embed/tv?tmdb=${id}`, episodeUrl: (id, s, e) => `https://vsrc.su/embed/tv?tmdb=${id}&season=${s}&episode=${e}` },
   { id: "vidlink", name: "VidLink", movieUrl: (id) => `https://vidlink.pro/movie/${id}`, tvUrl: (id) => `https://vidlink.pro/tv/${id}`, episodeUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}` },
-  { id: "embedsu", name: "Embed.su", movieUrl: (id) => `https://embed.su/embed/movie/${id}`, tvUrl: (id) => `https://embed.su/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
-  { id: "autoembed", name: "AutoEmbed", movieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`, tvUrl: (id) => `https://player.autoembed.cc/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` },
   { id: "superembed", name: "SuperEmbed", movieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`, tvUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`, episodeUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+  { id: "smashy", name: "SmashyStream", movieUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`, tvUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`, episodeUrl: (id, s, e) => `https://embed.smashystream.com/playere.php?tmdb=${id}&season=${s}&episode=${e}` },
+  { id: "vidsrcpro", name: "VidSrc Pro", movieUrl: (id) => `https://vidsrc.pro/embed/movie/${id}`, tvUrl: (id) => `https://vidsrc.pro/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://vidsrc.pro/embed/tv/${id}/${s}/${e}` },
+  { id: "vidsrcin", name: "VidSrc IN", movieUrl: (id) => `https://vidsrc.in/embed/movie/${id}`, tvUrl: (id) => `https://vidsrc.in/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://vidsrc.in/embed/tv/${id}/${s}/${e}` },
 ];
 
 // --- HELPERS ---
@@ -55,6 +57,7 @@ const I = {
   Film: () => <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M7 2v20M17 2v20M2 12h20" stroke="currentColor" strokeWidth="2"/></svg>,
   Tv: () => <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="15" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M17 2l-5 5-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   Bookmark: () => <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>,
+  Fullscreen: () => <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>,
 };
 
 // --- STYLES ---
@@ -153,16 +156,17 @@ body{background:var(--bg);color:var(--t);font-family:'Outfit',sans-serif;overflo
 
 /* PLAYER */
 .cfw-player{position:fixed;inset:0;z-index:300;background:#000}
-.cfw-player-top{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:linear-gradient(to bottom,rgba(0,0,0,0.8),transparent);pointer-events:none}
+.cfw-player-top{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:linear-gradient(to bottom,rgba(0,0,0,0.9),transparent);pointer-events:none}
 .cfw-player-top>*{pointer-events:auto}
 .cfw-srv-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.12);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif}
 .cfw-srv-dd{position:absolute;top:100%;left:0;margin-top:6px;background:var(--s1);border:1px solid rgba(255,255,255,0.08);border-radius:10px;overflow:hidden;min-width:170px;box-shadow:0 12px 40px rgba(0,0,0,0.6);animation:fu 0.15s ease}
 .cfw-srv-i{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:0.15s;color:var(--t2)}
 .cfw-srv-i:hover{background:var(--s2);color:var(--t)}
 .cfw-srv-i.on{color:var(--green)}
-.cfw-exit{background:var(--r);color:#fff;border:none;padding:9px 22px;border-radius:8px;cursor:pointer;font-weight:800;font-size:12px;font-family:'Outfit',sans-serif}
+.cfw-exit{background:var(--r);color:#fff;border:none;padding:9px 22px;border-radius:8px;cursor:pointer;font-weight:800;font-size:12px;font-family:'Outfit',sans-serif;transition:0.2s}
 .cfw-exit:hover{background:var(--r2)}
-.cfw-refocus{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:8px 22px;border-radius:20px;font-weight:800;font-size:11px;z-index:10;pointer-events:none;animation:fu 0.3s ease}
+.cfw-fs-btn{background:rgba(0,0,0,0.7);color:#fff;border:1px solid rgba(255,255,255,0.12);padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:800;font-size:12px;font-family:'Outfit',sans-serif;display:flex;align-items:center;gap:6px;backdrop-filter:blur(8px);transition:0.2s}
+.cfw-fs-btn:hover{background:rgba(255,255,255,0.1)}
 
 /* SEARCH RESULTS */
 .cfw-res{padding:80px 40px 40px;min-height:80vh}
@@ -258,7 +262,7 @@ function ContinueRow({ onPlay, onRefresh }) {
 function Player({ media, onClose }) {
   const [sid, setSid] = useState(() => { try { return localStorage.getItem("cfw_srv")||"vidsrc"; } catch { return "vidsrc"; } });
   const [dd, setDd] = useState(false);
-  const [fighting, setFighting] = useState(false);
+  const playerRef = useRef(null); // Reference for full screen targeting
   const srv = SERVERS.find(s => s.id === sid) || SERVERS[0];
   const url = media.episode ? srv.episodeUrl(media.tmdbId, media.season, media.episode) : (media.type === "movie" ? srv.movieUrl(media.tmdbId) : srv.tvUrl(media.tmdbId));
 
@@ -273,14 +277,33 @@ function Player({ media, onClose }) {
 
   const pick = (id) => { setSid(id); setDd(false); try { localStorage.setItem("cfw_srv", id); } catch {} };
 
+  // Native HTML5 Fullscreen forced on the wrapper
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      playerRef.current?.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
   return (
-    <div className="cfw-player">
+    <div className="cfw-player" ref={playerRef}>
       <div className="cfw-player-top">
         <div style={{position:"relative"}}>
           <button className="cfw-srv-btn" onClick={() => setDd(!dd)}><I.Server/> {srv.name} ▾</button>
           {dd && <div className="cfw-srv-dd">{SERVERS.map(s => <div key={s.id} className={`cfw-srv-i ${s.id===sid?"on":""}`} onClick={() => pick(s.id)}>{s.name}{s.id===sid && <span style={{width:6,height:6,borderRadius:3,background:"var(--green)"}}/>}</div>)}</div>}
         </div>
-        <button className="cfw-exit" onClick={onClose}>✕ EXIT</button>
+        
+        <div style={{display: "flex", gap: "10px"}}>
+          <button className="cfw-fs-btn" onClick={toggleFullscreen}>
+            <I.Fullscreen/> FULLSCREEN
+          </button>
+          <button className="cfw-exit" onClick={onClose}>✕ EXIT</button>
+        </div>
       </div>
       <iframe key={sid} src={url} style={{width:"100%",height:"100%",border:"none"}} allowFullScreen allow="autoplay; fullscreen; encrypted-media"/>
     </div>
