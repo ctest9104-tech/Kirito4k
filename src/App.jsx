@@ -1,19 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import Hls from "hls.js"; // Make sure to npm install hls.js
 
 // --- CONFIG ---
 const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIzMTVjYWYzNjkxNTc1OGIwMDFlOTYwMzg5OWJlOTY3MCIsIm5iZiI6MTc3NTcxMjQyNy44MTksInN1YiI6IjY5ZDczOGFiNTIzNzlkODZhY2Q3NzE4YSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.ID34IJ0N4KSVI4UIziKBwiPR2NQlLAnblAxZC48GWS8";
 const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
-
-// Updated list removing dead domains (embed.su, vsrc.su, vidsrc.pro) and adding currently active ones
-const SERVERS = [
-  { id: "vidlink", name: "VidLink (Best)", movieUrl: (id) => `https://vidlink.pro/movie/${id}`, tvUrl: (id) => `https://vidlink.pro/tv/${id}`, episodeUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}` },
-  { id: "vidsrcnet", name: "VidSrc.net", movieUrl: (id) => `https://vidsrc.net/embed/movie?tmdb=${id}`, tvUrl: (id) => `https://vidsrc.net/embed/tv?tmdb=${id}`, episodeUrl: (id, s, e) => `https://vidsrc.net/embed/tv?tmdb=${id}&season=${s}&episode=${e}` },
-  { id: "vidsrccc", name: "VidSrc.cc", movieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`, tvUrl: (id) => `https://vidsrc.cc/v2/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}` },
-  { id: "autoembed", name: "AutoEmbed", movieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`, tvUrl: (id) => `https://player.autoembed.cc/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` },
-  { id: "superembed", name: "SuperEmbed", movieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`, tvUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`, episodeUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
-  { id: "smashy", name: "SmashyStream", movieUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`, tvUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`, episodeUrl: (id, s, e) => `https://embed.smashystream.com/playere.php?tmdb=${id}&season=${s}&episode=${e}` },
-];
+const RENDER_API = "https://movie-scraper-api-cxd7.onrender.com";
 
 // --- HELPERS ---
 async function tmdb(path) {
@@ -158,11 +150,6 @@ body{background:var(--bg);color:var(--t);font-family:'Outfit',sans-serif;overflo
 .cfw-player{position:fixed;inset:0;z-index:300;background:#000}
 .cfw-player-top{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:linear-gradient(to bottom,rgba(0,0,0,0.9),transparent);pointer-events:none}
 .cfw-player-top>*{pointer-events:auto}
-.cfw-srv-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.12);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif}
-.cfw-srv-dd{position:absolute;top:100%;left:0;margin-top:6px;background:var(--s1);border:1px solid rgba(255,255,255,0.08);border-radius:10px;overflow:hidden;min-width:170px;box-shadow:0 12px 40px rgba(0,0,0,0.6);animation:fu 0.15s ease}
-.cfw-srv-i{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:0.15s;color:var(--t2)}
-.cfw-srv-i:hover{background:var(--s2);color:var(--t)}
-.cfw-srv-i.on{color:var(--green)}
 .cfw-exit{background:var(--r);color:#fff;border:none;padding:9px 22px;border-radius:8px;cursor:pointer;font-weight:800;font-size:12px;font-family:'Outfit',sans-serif;transition:0.2s}
 .cfw-exit:hover{background:var(--r2)}
 .cfw-fs-btn{background:rgba(0,0,0,0.7);color:#fff;border:1px solid rgba(255,255,255,0.12);padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:800;font-size:12px;font-family:'Outfit',sans-serif;display:flex;align-items:center;gap:6px;backdrop-filter:blur(8px);transition:0.2s}
@@ -258,54 +245,70 @@ function ContinueRow({ onPlay, onRefresh }) {
   );
 }
 
-// --- PLAYER ---
+// --- UPDATED CUSTOM AD-FREE PLAYER ---
 function Player({ media, onClose }) {
-  const [sid, setSid] = useState(() => { try { return localStorage.getItem("cfw_srv")||"vidlink"; } catch { return "vidlink"; } });
-  const [dd, setDd] = useState(false);
+  const videoRef = useRef(null);
   const playerRef = useRef(null);
-  const srv = SERVERS.find(s => s.id === sid) || SERVERS[0];
-  const url = media.episode ? srv.episodeUrl(media.tmdbId, media.season, media.episode) : (media.type === "movie" ? srv.movieUrl(media.tmdbId) : srv.tvUrl(media.tmdbId));
+  const [status, setStatus] = useState("Filtering out CAMs and finding HD stream...");
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    let hls;
     document.body.style.overflow = "hidden";
-    const orig = window.open;
-    window.open = () => null;
-    const onBlur = () => setTimeout(() => { try { window.focus(); } catch{} }, 80);
-    window.addEventListener("blur", onBlur);
-    return () => { document.body.style.overflow = ""; window.open = orig; window.removeEventListener("blur", onBlur); };
-  }, []);
 
-  const pick = (id) => { setSid(id); setDd(false); try { localStorage.setItem("cfw_srv", id); } catch {} };
+    const loadVideo = async () => {
+      try {
+        const query = media.episode 
+          ? `/get-video?id=${media.tmdbId}&type=tv&season=${media.season}&episode=${media.episode}`
+          : `/get-video?id=${media.tmdbId}&type=movie`;
+          
+        const res = await fetch(`${RENDER_API}${query}`);
+        const data = await res.json();
 
-  // Native HTML5 Fullscreen forced on the wrapper
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      playerRef.current?.requestFullscreen().catch(err => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
-      });
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
+        if (!res.ok || !data.url) throw new Error(data.error || "No HD stream found.");
+
+        if (Hls.isSupported()) {
+          hls = new Hls();
+          hls.loadSource(data.url);
+          hls.attachMedia(videoRef.current);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            setStatus("");
+            videoRef.current.play().catch(() => setStatus("Click Play to Start"));
+          });
+          hls.on(Hls.Events.ERROR, (event, data) => { if (data.fatal) setError("Stream playback failed."); });
+        } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+          videoRef.current.src = data.url;
+          videoRef.current.addEventListener("loadedmetadata", () => {
+            setStatus("");
+            videoRef.current.play();
+          });
+        }
+      } catch (err) {
+        setError(err.message === "Failed to fetch" ? "The server is waking up... wait 30 seconds." : err.message);
       }
-    }
+    };
+
+    loadVideo();
+    return () => { document.body.style.overflow = ""; if (hls) hls.destroy(); };
+  }, [media]);
+
+  const toggleFs = () => {
+    if (!document.fullscreenElement) playerRef.current?.requestFullscreen();
+    else document.exitFullscreen();
   };
 
   return (
-    <div className="cfw-player" ref={playerRef}>
+    <div className="cfw-player" ref={playerRef} style={{background:"#000", display:"flex", alignItems:"center", justifyContent:"center"}}>
       <div className="cfw-player-top">
-        <div style={{position:"relative"}}>
-          <button className="cfw-srv-btn" onClick={() => setDd(!dd)}><I.Server/> {srv.name} ▾</button>
-          {dd && <div className="cfw-srv-dd">{SERVERS.map(s => <div key={s.id} className={`cfw-srv-i ${s.id===sid?"on":""}`} onClick={() => pick(s.id)}>{s.name}{s.id===sid && <span style={{width:6,height:6,borderRadius:3,background:"var(--green)"}}/>}</div>)}</div>}
-        </div>
-        
-        <div style={{display: "flex", gap: "10px"}}>
-          <button className="cfw-fs-btn" onClick={toggleFullscreen}>
-            <I.Fullscreen/> FULLSCREEN
-          </button>
+        <div style={{color:"#fff", fontSize:12, fontWeight:800, opacity:0.6}}>DIRECT HD SOURCE</div>
+        <div style={{display:"flex", gap:10}}>
+          <button className="cfw-fs-btn" onClick={toggleFs}><I.Fullscreen/> FULLSCREEN</button>
           <button className="cfw-exit" onClick={onClose}>✕ EXIT</button>
         </div>
       </div>
-      <iframe key={sid} src={url} style={{width:"100%",height:"100%",border:"none"}} allowFullScreen allow="autoplay; fullscreen; encrypted-media"/>
+      {status && !error && <div style={{color:"#fff", zIndex:5, fontSize:14}}>{status}</div>}
+      {error && <div style={{color:"var(--r)", fontWeight:800, textAlign:"center", padding:20, zIndex:5}}>{error}</div>}
+      <video ref={videoRef} controls playsInline style={{width:"100%", height:"100%", outline:"none", display: error ? "none" : "block"}} />
     </div>
   );
 }
