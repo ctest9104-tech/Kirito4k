@@ -5,14 +5,14 @@ const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIzMTVjYWYzNjkxNTc1OGIwMDFlOTY
 const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
 
-// Expanded and verified server list
+// Updated list removing dead domains (embed.su, vsrc.su, vidsrc.pro) and adding currently active ones
 const SERVERS = [
-  { id: "vidsrc", name: "VidSrc (Best)", movieUrl: (id) => `https://vsrc.su/embed/movie?tmdb=${id}`, tvUrl: (id) => `https://vsrc.su/embed/tv?tmdb=${id}`, episodeUrl: (id, s, e) => `https://vsrc.su/embed/tv?tmdb=${id}&season=${s}&episode=${e}` },
-  { id: "vidlink", name: "VidLink", movieUrl: (id) => `https://vidlink.pro/movie/${id}`, tvUrl: (id) => `https://vidlink.pro/tv/${id}`, episodeUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}` },
+  { id: "vidlink", name: "VidLink (Best)", movieUrl: (id) => `https://vidlink.pro/movie/${id}`, tvUrl: (id) => `https://vidlink.pro/tv/${id}`, episodeUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}` },
+  { id: "vidsrcnet", name: "VidSrc.net", movieUrl: (id) => `https://vidsrc.net/embed/movie?tmdb=${id}`, tvUrl: (id) => `https://vidsrc.net/embed/tv?tmdb=${id}`, episodeUrl: (id, s, e) => `https://vidsrc.net/embed/tv?tmdb=${id}&season=${s}&episode=${e}` },
+  { id: "vidsrccc", name: "VidSrc.cc", movieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`, tvUrl: (id) => `https://vidsrc.cc/v2/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}` },
+  { id: "autoembed", name: "AutoEmbed", movieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`, tvUrl: (id) => `https://player.autoembed.cc/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` },
   { id: "superembed", name: "SuperEmbed", movieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`, tvUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`, episodeUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
   { id: "smashy", name: "SmashyStream", movieUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`, tvUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`, episodeUrl: (id, s, e) => `https://embed.smashystream.com/playere.php?tmdb=${id}&season=${s}&episode=${e}` },
-  { id: "vidsrcpro", name: "VidSrc Pro", movieUrl: (id) => `https://vidsrc.pro/embed/movie/${id}`, tvUrl: (id) => `https://vidsrc.pro/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://vidsrc.pro/embed/tv/${id}/${s}/${e}` },
-  { id: "vidsrcin", name: "VidSrc IN", movieUrl: (id) => `https://vidsrc.in/embed/movie/${id}`, tvUrl: (id) => `https://vidsrc.in/embed/tv/${id}`, episodeUrl: (id, s, e) => `https://vidsrc.in/embed/tv/${id}/${s}/${e}` },
 ];
 
 // --- HELPERS ---
@@ -260,9 +260,9 @@ function ContinueRow({ onPlay, onRefresh }) {
 
 // --- PLAYER ---
 function Player({ media, onClose }) {
-  const [sid, setSid] = useState(() => { try { return localStorage.getItem("cfw_srv")||"vidsrc"; } catch { return "vidsrc"; } });
+  const [sid, setSid] = useState(() => { try { return localStorage.getItem("cfw_srv")||"vidlink"; } catch { return "vidlink"; } });
   const [dd, setDd] = useState(false);
-  const playerRef = useRef(null); // Reference for full screen targeting
+  const playerRef = useRef(null);
   const srv = SERVERS.find(s => s.id === sid) || SERVERS[0];
   const url = media.episode ? srv.episodeUrl(media.tmdbId, media.season, media.episode) : (media.type === "movie" ? srv.movieUrl(media.tmdbId) : srv.tvUrl(media.tmdbId));
 
