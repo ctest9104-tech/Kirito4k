@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   define: {
-    global: 'globalThis',
+    // Direct string replacement for better mobile compatibility
+    'global': 'window',
     'process.env': {}
   },
   resolve: {
@@ -17,5 +18,5 @@ export default defineConfig({
       buffer: 'buffer',
       process: 'process',
     },
-  },
+  }
 })
