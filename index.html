@@ -3,90 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Streamly | Kirito4K Edition</title>
+    <title>KIRITO4K | FLICK</title>
     <style>
-        :root { --accent: #e50914; --bg: #050505; --card: #111; }
-        body { margin: 0; background: var(--bg); color: white; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        nav { padding: 1rem 5%; background: rgba(0,0,0,0.9); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; backdrop-filter: blur(10px); border-bottom: 1px solid #222; }
-        .logo { color: var(--accent); font-weight: 800; font-size: 1.5rem; text-decoration: none; letter-spacing: -1px; }
-        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; padding: 1.5rem 5%; }
-        .card { background: var(--card); border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative; border: 1px solid #222; }
-        .card:hover { transform: translateY(-5px); border-color: var(--accent); }
-        .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
-        .card-meta { padding: 10px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(transparent, rgba(0,0,0,0.9)); position: absolute; bottom: 0; width: 100%; }
-        #player-overlay { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; animation: fadeIn 0.3s ease; }
-        .player-header { padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center; background: #111; }
+        :root { --red: #e50914; --dark: #050505; }
+        body { margin: 0; background: var(--dark); color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+        nav { padding: 1.2rem 5%; background: rgba(0,0,0,0.85); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #222; backdrop-filter: blur(10px); }
+        .logo { color: var(--red); font-weight: 900; font-size: 1.6rem; letter-spacing: -1px; text-decoration: none; }
+        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; padding: 20px 5%; }
+        .movie-card { position: relative; border-radius: 10px; overflow: hidden; cursor: pointer; background: #111; transition: 0.3s; border: 1px solid #1a1a1a; }
+        .movie-card:hover { transform: scale(1.05); border-color: var(--red); }
+        .movie-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
+        .movie-card .info { position: absolute; bottom: 0; width: 100%; padding: 10px; background: linear-gradient(transparent, rgba(0,0,0,0.9)); font-size: 0.75rem; font-weight: bold; }
+        #search { background: #151515; border: 1px solid #333; color: white; padding: 10px 20px; border-radius: 50px; width: 40%; outline: none; }
+        #player { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
+        .player-bar { padding: 15px 5%; display: flex; justify-content: space-between; background: #111; align-items: center; }
         iframe { flex: 1; border: none; width: 100%; height: 100%; }
-        .close-btn { background: var(--accent); color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        #search-input { background: #1a1a1a; border: 1px solid #333; color: white; padding: 0.6rem 1.2rem; border-radius: 50px; width: 250px; outline: none; transition: 0.3s; }
-        #search-input:focus { border-color: var(--accent); width: 300px; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @media (max-width: 600px) { #grid { grid-template-columns: repeat(2, 1fr); } #search-input { width: 120px; } #search-input:focus { width: 150px; } }
+        .btn-close { background: var(--red); color: white; border: none; padding: 8px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        @media (max-width: 600px) { #grid { grid-template-columns: repeat(2, 1fr); } #search { width: 130px; } }
     </style>
 </head>
 <body>
     <nav>
-        <a href="#" class="logo" onclick="location.reload()">STREAMLY</a>
-        <input type="text" id="search-input" placeholder="Search movies...">
+        <a href="#" class="logo" onclick="location.reload()">KIRITO4K</a>
+        <input type="text" id="search" placeholder="Search movies...">
     </nav>
 
-    <div id="grid">
-        </div>
+    <div id="grid"></div>
 
-    <div id="player-overlay">
-        <div class="player-header">
-            <span id="now-playing" style="font-weight: bold; opacity: 0.8;">...</span>
-            <button class="close-btn" onclick="stopVideo()">✕ CLOSE</button>
+    <div id="player">
+        <div class="player-bar">
+            <span id="p-title" style="opacity:0.7">...</span>
+            <button class="btn-close" onclick="closePlayer()">✕ CLOSE</button>
         </div>
-        <iframe id="main-video" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+        <iframe id="p-frame" allowfullscreen allow="autoplay; encrypted-media"></iframe>
     </div>
 
     <script>
-        const API_KEY = '315caf36915c58b001e9603899be9670';
+        const API = 'https://api.themoviedb.org/3';
+        const KEY = '315caf36915c58b001e9603899be9670';
         const grid = document.getElementById('grid');
-        const overlay = document.getElementById('player-overlay');
-        const iframe = document.getElementById('main-video');
-        const searchInput = document.getElementById('search-input');
+        const iframe = document.getElementById('p-frame');
+        const search = document.getElementById('search');
 
-        async function fetchContent(query = '') {
-            const url = query 
-                ? `https://api.themoviedb.org/3/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}`
-                : `https://api.themoviedb.org/3/trending/movie/week?api_key=${API_KEY}`;
+        async function load(q = '') {
+            const url = q 
+                ? `${API}/search/movie?api_key=${KEY}&query=${encodeURIComponent(q)}`
+                : `${API}/movie/popular?api_key=${KEY}`;
             
             try {
                 const res = await fetch(url);
                 const data = await res.json();
                 render(data.results);
             } catch (e) {
-                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; opacity: 0.5;">Mirror connection failed. Try searching specifically.</div>`;
+                grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; opacity:0.5;">Mirror Timeout. Try again in 10s.</div>`;
             }
         }
 
-        function render(items) {
-            grid.innerHTML = items.map(m => `
-                <div class="card" onclick="playVideo('${m.id}', '${m.title.replace(/'/g, "\\'")}')">
-                    <img src="https://image.tmdb.org/t/p/w440_and_h660_face${m.poster_path}" alt="${m.title}" onerror="this.src='https://via.placeholder.com/440x660?text=No+Image'">
-                    <div class="card-meta">${m.title}</div>
+        function render(movies) {
+            grid.innerHTML = movies.map(m => `
+                <div class="movie-card" onclick="openPlayer('${m.id}', '${m.title.replace(/'/g, "")}')">
+                    <img src="https://image.tmdb.org/t/p/w500${m.poster_path}" onerror="this.src='https://via.placeholder.com/500x750?text=KIRITO'">
+                    <div class="info">${m.title}</div>
                 </div>
             `).join('');
         }
 
-        function playVideo(id, title) {
-            document.getElementById('now-playing').innerText = title;
-            // VidLink Pro v2 - GitHub's most reliable ad-free mirror in 2026
-            iframe.src = `https://vidlink.pro/embed/movie/${id}?primaryColor=e50914&autoplay=false`;
-            overlay.style.display = 'flex';
+        function openPlayer(id, title) {
+            document.getElementById('p-title').innerText = title;
+            // The Flickv4 Primary Mirror (No ad-refusal)
+            iframe.src = `https://vidlink.pro/embed/movie/${id}?primaryColor=e50914`;
+            document.getElementById('player').style.display = 'flex';
             document.body.style.overflow = 'hidden';
         }
 
-        function stopVideo() {
-            overlay.style.display = 'none';
+        function closePlayer() {
+            document.getElementById('player').style.display = 'none';
             iframe.src = '';
             document.body.style.overflow = 'auto';
         }
 
-        searchInput.oninput = (e) => fetchContent(e.target.value);
-        fetchContent();
+        search.oninput = (e) => load(e.target.value);
+        load();
     </script>
 </body>
 </html>
