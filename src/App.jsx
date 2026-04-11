@@ -1,163 +1,231 @@
 import { useState, useEffect, useRef } from "react";
 import Hls from "hls.js";
 
+// --- CONFIGURATION ---
 const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIzMTVjYWYzNjkxNTc1OGIwMDFlOTYwMzg5OWJlOTY3MCIsIm5iZiI6MTc3NTcxMjQyNy44MTksInN1YiI6IjY5ZDczOGFiNTIzNzlkODZhY2Q3NzE4YSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.ID34IJ0N4KSVI4UIziKBwiPR2NQlLAnblAxZC48GWS8";
-const TMDB = "https://api.themoviedb.org/3";
-const IMG = "https://image.tmdb.org/t/p";
+const TMDB_BASE = "https://api.themoviedb.org/3";
+const IMG_BASE = "https://image.tmdb.org/t/p/w500";
 
-const tmdb = async (path) => {
-  const r = await fetch(`${TMDB}${path}`, { headers: { Authorization: `Bearer ${TMDB_TOKEN}` } });
-  return r.json();
+// --- API HELPERS ---
+const fetchTMDB = async (path) => {
+  const res = await fetch(`${TMDB_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${TMDB_TOKEN}` }
+  });
+  return res.json();
 };
+
+// --- COMPONENTS ---
 
 function Player({ media, onClose }) {
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(true);
-  const [useIframe, setUseIframe] = useState(false);
-  const [status, setStatus] = useState("Searching for stream...");
+  const [source, setSource] = useState("direct"); // 'direct' or 'iframe'
+  const [status, setStatus] = useState("Probing ad-free servers...");
 
-  // Fallback for when direct links are blocked
-  const fallbackUrl = media.episode 
-    ? `https://vidsrc.me/embed/tv?tmdb=${media.tmdbId}&s=${media.season}&e=${media.episode}`
-    : `https://vidsrc.me/embed/movie?tmdb=${media.tmdbId}`;
+  // 2026 Stable Mirrors for Iframe Fallback
+  const getIframeUrl = () => {
+    const { id, season, episode, type } = media;
+    if (type === "tv") {
+      return `https://vidsrc.icu/embed/tv/${id}/${season}/${episode}`;
+    }
+    return `https://vidsrc.icu/embed/movie/${id}`;
+  };
 
   useEffect(() => {
     let hls;
-    const init = async () => {
+    const initPlayer = async () => {
       try {
-        const query = media.episode ? `tmdb=${media.tmdbId}&season=${media.season}&episode=${media.episode}` : `tmdb=${media.tmdbId}`;
-        const res = await fetch(`/api/scrape?${query}`);
+        const params = media.type === "tv" 
+          ? `tmdb=${media.id}&season=${media.season}&episode=${media.episode}` 
+          : `tmdb=${media.id}`;
+        
+        const res = await fetch(`/api/scrape?${params}`);
         const data = await res.json();
 
         if (data.url) {
-          setStatus(`Playing via ${data.provider} (Ad-Free)`);
+          setStatus("🛡️ PURE AD-FREE STREAM ACTIVE");
           if (Hls.isSupported()) {
             hls = new Hls();
             hls.loadSource(data.url);
             hls.attachMedia(videoRef.current);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => { setLoading(false); videoRef.current.play(); });
-          } else { setUseIframe(true); }
-        } else { throw new Error(); }
-      } catch {
-        setStatus("Fallback Mode (Popups Blocked)");
-        setUseIframe(true);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              setLoading(false);
+              videoRef.current.play().catch(() => {}); 
+            });
+          } else {
+            setSource("iframe");
+          }
+        } else {
+          throw new Error("No direct link found");
+        }
+      } catch (err) {
+        setStatus("⚠️ MIRROR MODE (AD-BLOCK RECOMMENDED)");
+        setSource("iframe");
         setLoading(false);
       }
     };
-    init();
+
+    initPlayer();
     return () => hls?.destroy();
   }, [media]);
 
   return (
     <div className="player-overlay">
       <div className="player-bar">
-        <span>{status.toUpperCase()}</span>
-        <button onClick={onClose}>CLOSE</button>
+        <span className="status-badge">{status}</span>
+        <button className="exit-btn" onClick={onClose}>✕ CLOSE</button>
       </div>
-      {loading && <div className="spinner-box"><div className="spinner"></div></div>}
-      {useIframe ? (
-        <iframe src={fallbackUrl} frameBorder="0" allowFullScreen sandbox="allow-forms allow-scripts allow-same-origin" />
+      
+      {loading && (
+        <div className="loader-container">
+          <div className="spinner"></div>
+          <p>Optimizing Stream...</p>
+        </div>
+      )}
+
+      {source === "iframe" ? (
+        <iframe 
+          src={getIframeUrl()} 
+          allowFullScreen 
+          sandbox="allow-forms allow-scripts allow-same-origin" 
+          onLoad={() => setLoading(false)}
+        />
       ) : (
-        <video ref={videoRef} controls playsInline style={{display: loading ? 'none' : 'block'}} />
+        <video ref={videoRef} controls playsInline style={{ display: loading ? 'none' : 'block' }} />
       )}
     </div>
   );
 }
 
-function Detail({ item, onClose }) {
-  const [d, setD] = useState(null);
+function DetailView({ item, onClose }) {
+  const [data, setData] = useState(null);
   const [season, setSeason] = useState(1);
-  const [eps, setEps] = useState([]);
+  const [episodes, setEpisodes] = useState([]);
   const [playing, setPlaying] = useState(null);
   const type = item.title ? "movie" : "tv";
 
-  useEffect(() => { tmdb(`/${type}/${item.id}`).then(setD); }, [item]);
-  useEffect(() => { if (type === "tv") tmdb(`/tv/${item.id}/season/${season}`).then(r => setEps(r?.episodes || [])); }, [season, item.id]);
+  useEffect(() => {
+    fetchTMDB(`/${type}/${item.id}`).then(setData);
+  }, [item, type]);
 
-  if (!d) return null;
+  useEffect(() => {
+    if (type === "tv") {
+      fetchTMDB(`/tv/${item.id}/season/${season}`).then(res => setEpisodes(res.episodes || []));
+    }
+  }, [item.id, season, type]);
+
+  if (!data) return null;
 
   return (
     <div className="detail-screen">
-      <div className="detail-content">
-        <button className="back-btn" onClick={onClose}>← BACK</button>
-        <h1>{d.title || d.name}</h1>
-        <p className="overview">{d.overview}</p>
-        <button className="main-play" onClick={() => setPlaying({ tmdbId: item.id, season, episode: 1 })}>WATCH NOW</button>
-
-        {type === "tv" && (
-          <div className="tv-controls">
-            <select value={season} onChange={e => setSeason(e.target.value)}>
-              {d.seasons?.filter(s => s.season_number > 0).map(s => <option key={s.id} value={s.season_number}>Season {s.season_number}</option>)}
-            </select>
-            <div className="episode-grid">
-              {eps.map(ep => <div key={ep.id} className="ep-card" onClick={() => setPlaying({ tmdbId: item.id, season, episode: ep.episode_number })}>E{ep.episode_number}: {ep.name}</div>)}
-            </div>
+      <button className="back-link" onClick={onClose}>← BACK TO BROWSE</button>
+      
+      <div className="hero-content">
+        <img className="main-poster" src={`${IMG_BASE}${data.poster_path}`} alt="" />
+        <div className="text-info">
+          <h1>{data.title || data.name}</h1>
+          <div className="meta">
+            <span className="rating">⭐ {data.vote_average?.toFixed(1)}</span>
+            <span>{data.release_date || data.first_air_date}</span>
           </div>
-        )}
+          <p className="description">{data.overview}</p>
+          
+          {type === "movie" && (
+            <button className="play-now" onClick={() => setPlaying({ id: data.id, type: "movie" })}>
+              WATCH NOW
+            </button>
+          )}
+        </div>
       </div>
+
+      {type === "tv" && (
+        <div className="episode-selector">
+          <div className="selector-header">
+            <h3>Episodes</h3>
+            <select value={season} onChange={(e) => setSeason(e.target.value)}>
+              {data.seasons?.filter(s => s.season_number > 0).map(s => (
+                <option key={s.id} value={s.season_number}>Season {s.season_number}</option>
+              ))}
+            </select>
+          </div>
+          <div className="ep-list">
+            {episodes.map(ep => (
+              <div key={ep.id} className="ep-row" onClick={() => setPlaying({ id: data.id, type: "tv", season, episode: ep.episode_number })}>
+                <span className="ep-num">{ep.episode_number}</span>
+                <span className="ep-title">{ep.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {playing && <Player media={playing} onClose={() => setPlaying(null)} />}
     </div>
   );
 }
 
 export default function App() {
-  const [rows, setRows] = useState([]);
-  const [detail, setDetail] = useState(null);
+  const [content, setContent] = useState([]);
+  const [selection, setSelection] = useState(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    tmdb("/trending/all/week").then(data => setRows(data.results || []));
+    fetchTMDB("/trending/all/day").then(res => setContent(res.results || []));
   }, []);
 
-  const filtered = search ? rows.filter(r => (r.title || r.name).toLowerCase().includes(search.toLowerCase())) : rows;
+  const results = search 
+    ? content.filter(i => (i.title || i.name).toLowerCase().includes(search.toLowerCase())) 
+    : content;
 
   return (
-    <div className="app-container">
+    <div className="kirito-root">
       <style>{`
-        :root { --red: #e50914; --bg: #050505; }
-        body { margin: 0; background: var(--bg); color: white; font-family: 'Inter', sans-serif; }
-        .nav { height: 70px; display: flex; align-items: center; padding: 0 40px; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); position: fixed; width: 100%; z-index: 100; box-sizing: border-box; }
-        .logo { color: var(--red); font-weight: 900; font-size: 28px; letter-spacing: -1px; cursor: pointer; }
-        .search-bar { margin-left: auto; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 15px; border-radius: 20px; outline: none; }
-        .hero-sec { padding: 100px 40px 40px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
-        .movie-card { cursor: pointer; transition: 0.3s; }
-        .movie-card:hover { transform: scale(1.05); }
-        .movie-card img { width: 100%; border-radius: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
-        .detail-screen { position: fixed; inset: 0; background: var(--bg); z-index: 200; overflow-y: auto; padding: 50px; }
-        .back-btn { background: none; border: 1px solid #333; color: white; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
-        .main-play { background: var(--red); color: white; border: none; padding: 15px 40px; border-radius: 5px; font-weight: bold; font-size: 18px; cursor: pointer; margin: 20px 0; }
-        .overview { color: #aaa; max-width: 700px; line-height: 1.6; }
-        .episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 20px; }
-        .ep-card { background: #111; padding: 15px; border-radius: 8px; cursor: pointer; border: 1px solid #222; }
-        .ep-card:hover { border-color: var(--red); }
+        :root { --accent: #e50914; --bg: #0a0a0b; --surface: #141417; }
+        body { background: var(--bg); color: white; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
+        .navbar { height: 70px; display: flex; align-items: center; padding: 0 4%; background: rgba(0,0,0,0.8); position: fixed; top: 0; width: 100%; z-index: 100; box-sizing: border-box; }
+        .logo { font-weight: 900; color: var(--accent); font-size: 24px; letter-spacing: -1px; cursor: pointer; }
+        .search-input { margin-left: auto; background: var(--surface); border: 1px solid #333; color: white; padding: 8px 16px; border-radius: 20px; outline: none; width: 250px; }
+        .main-grid { padding: 100px 4% 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
+        .poster-card { cursor: pointer; transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1); }
+        .poster-card:hover { transform: scale(1.05); z-index: 2; }
+        .poster-card img { width: 100%; border-radius: 8px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        .detail-screen { position: fixed; inset: 0; background: var(--bg); z-index: 200; overflow-y: auto; padding: 40px 6%; }
+        .hero-content { display: flex; gap: 40px; margin-top: 30px; flex-wrap: wrap; }
+        .main-poster { width: 300px; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
+        .text-info { flex: 1; min-width: 300px; }
+        .play-now { background: var(--accent); color: white; border: none; padding: 16px 48px; border-radius: 8px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 20px; }
+        .ep-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 20px; }
+        .ep-row { background: var(--surface); padding: 15px; border-radius: 8px; cursor: pointer; display: flex; gap: 15px; border: 1px solid #222; }
+        .ep-row:hover { border-color: var(--accent); }
         .player-overlay { position: fixed; inset: 0; background: black; z-index: 1000; display: flex; flex-direction: column; }
-        .player-bar { padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; background: #0a0a0a; border-bottom: 1px solid #222; font-size: 11px; font-weight: bold; }
-        .player-bar button { background: var(--red); color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; }
-        iframe, video { width: 100%; flex: 1; border: none; }
-        .spinner-box { margin: auto; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #222; border-top-color: var(--red); border-radius: 50%; animation: spin 1s linear infinite; }
+        .player-bar { height: 60px; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #222; }
+        .status-badge { font-size: 11px; font-weight: bold; color: #888; }
+        .exit-btn { background: #222; border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        iframe, video { flex: 1; border: none; width: 100%; }
+        .loader-container { margin: auto; text-align: center; color: #666; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #222; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 15px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        select { background: #222; color: white; padding: 10px; border-radius: 5px; border: none; margin-bottom: 20px; }
       `}</style>
 
-      <nav className="nav">
-        <div className="logo">KIRITO4K</div>
-        <input className="search-bar" placeholder="Search movies..." onChange={e => setSearch(e.target.value)} />
+      <nav className="navbar">
+        <div className="logo" onClick={() => {setSelection(null); setSearch("");}}>KIRITO4K</div>
+        <input 
+          className="search-input" 
+          placeholder="Search movies & shows..." 
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </nav>
 
-      <div className="hero-sec">
-        <h2>Trending Now</h2>
-        <div className="grid">
-          {filtered.map(m => (
-            <div key={m.id} className="movie-card" onClick={() => setDetail(m)}>
-              <img src={`${IMG}/w500${m.poster_path}`} alt={m.title} />
-            </div>
-          ))}
-        </div>
+      <div className="main-grid">
+        {results.map(item => (
+          <div key={item.id} className="poster-card" onClick={() => setSelection(item)}>
+            <img src={`${IMG_BASE}${item.poster_path}`} alt="" />
+          </div>
+        ))}
       </div>
 
-      {detail && <Detail item={detail} onClose={() => setDetail(null)} />}
+      {selection && <DetailView item={selection} onClose={() => setSelection(null)} />}
     </div>
   );
 }
