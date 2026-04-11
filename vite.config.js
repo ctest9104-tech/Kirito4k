@@ -5,13 +5,12 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   define: {
-    // This is safer than the 'global' alias for some edge cases
-    'process.env': {},
-    global: 'globalThis', 
+    global: 'globalThis',
+    'process.env': {}
   },
   resolve: {
     alias: {
-      'bittorrent-dht': 'identity-obj-proxy', 
+      'bittorrent-dht': 'identity-obj-proxy',
       path: 'path-browserify',
       crypto: 'crypto-browserify',
       stream: 'stream-browserify',
@@ -19,8 +18,4 @@ export default defineConfig({
       process: 'process',
     },
   },
-  optimizeDeps: {
-    // Forces Vite to include these in the pre-bundle
-    include: ['buffer', 'process', 'webtorrent']
-  }
 })
