@@ -1,3 +1,7 @@
+import { Buffer } from 'buffer';
+window.Buffer = Buffer;
+import process from 'process';
+window.process = process;
 import React, { useState, useEffect, useRef } from "react";
 import WebTorrent from "webtorrent";
 
