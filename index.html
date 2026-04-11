@@ -3,44 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KIRITO4K | PRO</title>
+    <title>KIRITO4K</title>
     <style>
-        body { margin: 0; background: #050505; color: white; font-family: sans-serif; overflow-x: hidden; }
-        nav { padding: 15px; background: #000; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e50914; position: sticky; top: 0; z-index: 100; }
-        .logo { color: #e50914; font-weight: 900; font-size: 22px; cursor: pointer; }
-        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; padding: 15px; }
-        .card { background: #111; border-radius: 8px; overflow: hidden; cursor: pointer; position: relative; }
-        .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: #222; }
-        .card-t { font-size: 10px; padding: 5px; text-align: center; opacity: 0.8; }
-        #player { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
-        .p-bar { padding: 15px; background: #111; display: flex; justify-content: space-between; align-items: center; }
-        iframe { flex: 1; border: none; width: 100%; height: 100%; }
-        .btn { background: #e50914; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; }
-        #search { background: #111; border: 1px solid #333; color: white; padding: 8px 15px; border-radius: 20px; width: 50%; }
+        body { margin: 0; background: #000; color: white; font-family: sans-serif; }
+        nav { padding: 15px; background: #000; border-bottom: 2px solid #e50914; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 99; }
+        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; padding: 15px; }
+        .card { background: #111; border-radius: 6px; overflow: hidden; cursor: pointer; aspect-ratio: 2/3; position: relative; }
+        .card img { width: 100%; height: 100%; object-fit: cover; }
+        .title { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.7); font-size: 10px; padding: 5px; text-align: center; }
+        #player { position: fixed; inset: 0; background: #000; z-index: 999; display: none; flex-direction: column; }
+        .bar { padding: 10px; background: #111; display: flex; justify-content: space-between; }
+        iframe { flex: 1; border: none; background: #000; }
+        button { background: #e50914; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; }
     </style>
 </head>
 <body>
     <nav>
-        <div class="logo" onclick="location.reload()">KIRITO4K</div>
-        <input type="text" id="search" placeholder="Search movies...">
+        <span style="color:#e50914; font-weight:900; font-size:22px;">KIRITO4K</span>
+        <input id="q" placeholder="Search..." style="background:#111; border:1px solid #333; color:white; padding:5px 10px; border-radius:20px; width:40%;">
     </nav>
-
     <div id="grid"></div>
-
     <div id="player">
-        <div class="p-bar">
-            <span id="p-title" style="font-size:14px;">Loading...</span>
-            <button class="btn" onclick="closePlayer()">✕ CLOSE</button>
+        <div class="bar">
+            <span id="p-t">Loading...</span>
+            <button onclick="document.getElementById('player').style.display='none'; document.querySelector('iframe').src=''">✕ CLOSE</button>
         </div>
-        <iframe id="v-frame" allowfullscreen allow="autoplay"></iframe>
+        <iframe allowfullscreen allow="autoplay"></iframe>
     </div>
-
     <script>
-        const grid = document.getElementById('grid');
-        const search = document.getElementById('search');
-
-        // PRE-VERIFIED 2026 TRENDING LIST (Fixes the "Blank Screen" & 404)
-        const topMovies = [
+        const catalog = [
             { id: "tt15239678", t: "Dune: Part Two", p: "https://image.tmdb.org/t/p/w500/8uVKf6hadi2jT60p4Fc9p0tQNfs.jpg" },
             { id: "tt1677720", t: "The Batman", p: "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T6fujdq.jpg" },
             { id: "tt1011985", t: "Kung Fu Panda 4", p: "https://image.tmdb.org/t/p/w500/kDp1vUBiR1RQqb6jsYvS7v9p9mS.jpg" },
@@ -49,41 +40,31 @@
             { id: "tt15327088", t: "Civil War", p: "https://image.tmdb.org/t/p/w500/sh7EwyZMRYh9oqSydU7gn8sN622.jpg" }
         ];
 
-        function render(list) {
-            grid.innerHTML = list.map(m => `
-                <div class="card" onclick="play('${m.id}', '${m.t.replace(/'/g, "")}')">
-                    <img src="${m.p}">
-                    <div class="card-t">${m.t}</div>
+        function draw(list) {
+            document.getElementById('grid').innerHTML = list.map(m => `
+                <div class="card" onclick="play('${m.id}','${m.t}')">
+                    <img src="${m.p}" onerror="this.src='https://via.placeholder.com/300x450?text=KIRITO4K'">
+                    <div class="title">${m.t}</div>
                 </div>
             `).join('');
         }
 
-        async function searchMovies(q) {
-            if (!q) return render(topMovies);
-            try {
-                // Using a 2026 Public Proxy that doesn't 404
-                const res = await fetch(`https://www.omdbapi.com/?apikey=6924b423&s=${q}`);
-                const data = await res.json();
-                if (data.Search) {
-                    render(data.Search.map(i => ({ id: i.imdbID, t: i.Title, p: i.Poster })));
-                }
-            } catch (e) { console.log("Search error"); }
+        async function search(v) {
+            if(!v) return draw(catalog);
+            const res = await fetch(`https://www.omdbapi.com/?apikey=6924b423&s=${v}`);
+            const data = await res.json();
+            if(data.Search) draw(data.Search.map(i => ({id:i.imdbID, t:i.Title, p:i.Poster})));
         }
 
-        function play(id, title) {
-            document.getElementById('p-title').innerText = title;
-            // FIXED URL: No more 404s. Using the v2 direct route.
-            document.getElementById('v-frame').src = `https://vidlink.pro/embed/movie/${id}`;
+        function play(id, t) {
+            document.getElementById('p-t').innerText = t;
+            // Using Streamnova - the 2026 leader for ad-free mirroring
+            document.querySelector('iframe').src = `https://streamnova.cc/embed/${id}`;
             document.getElementById('player').style.display = 'flex';
         }
 
-        function closePlayer() {
-            document.getElementById('player').style.display = 'none';
-            document.getElementById('v-frame').src = '';
-        }
-
-        search.oninput = (e) => searchMovies(e.target.value);
-        render(topMovies);
+        document.getElementById('q').oninput = (e) => search(e.target.value);
+        draw(catalog);
     </script>
 </body>
 </html>
