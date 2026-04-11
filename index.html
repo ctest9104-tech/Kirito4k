@@ -1,12 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Kirito4k</title>
-  </head>
-  <body style="margin:0; background:#050505;">
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KIRITO4K</title>
+    <style>
+        body { margin: 0; background: #050505; color: white; font-family: sans-serif; overflow-x: hidden; }
+        nav { padding: 15px; background: #000; display: flex; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+        .logo { color: #e50914; font-weight: 900; font-size: 22px; margin: 0; }
+        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; padding: 15px; }
+        .card { cursor: pointer; border-radius: 5px; overflow: hidden; background: #111; position: relative; }
+        .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
+        #player { position: fixed; inset: 0; background: #000; z-index: 200; display: none; flex-direction: column; }
+        .bar { padding: 15px; background: #111; display: flex; justify-content: space-between; align-items: center; }
+        iframe { flex: 1; border: none; width: 100%; height: 100%; }
+        button { background: #e50914; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <nav>
+        <h1 class="logo">KIRITO4K</h1>
+        <input id="search" placeholder="Search..." style="background:#111; border:1px solid #333; color:white; padding:5px 10px; border-radius:20px;">
+    </nav>
+
+    <div id="grid"></div>
+
+    <div id="player">
+        <div class="bar">
+            <span id="p-title">Loading...</span>
+            <button onclick="closePlayer()">✕ CLOSE</button>
+        </div>
+        <div style="flex:1; position:relative;">
+            <div id="guard" onclick="this.style.display='none'" style="position:absolute; inset:0; z-index:10; background:transparent;"></div>
+            <iframe id="venom" allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const player = document.getElementById('player');
+        const iframe = document.getElementById('venom');
+        const pTitle = document.getElementById('p-title');
+
+        // 2026 Keyless API
+        async function loadMovies(query = '') {
+            try {
+                const url = query 
+                    ? `https://www.omdbapi.com/?apikey=6924b423&s=${query}` 
+                    : `https://vidsrc.icu/api/trending`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                const list = data.results || data.Search || [];
+                
+                grid.innerHTML = list.map(m => `
+                    <div class="card" onclick="openPlayer('${m.id || m.imdbID}', '${(m.title || m.Title).replace(/'/g, "")}')">
+                        <img src="${m.poster || (m.poster_path ? 'https://image.tmdb.org/t/p/w342' + m.poster_path : 'https://via.placeholder.com/342x513?text=No+Poster')}">
+                    </div>
+                `).join('');
+            } catch (e) {
+                grid.innerHTML = "<p>Error loading movies. Try again.</p>";
+            }
+        }
+
+        function openPlayer(id, title) {
+            pTitle.innerText = title;
+            // VidLink is the cleanest source in 2026
+            iframe.src = `https://vidlink.pro/embed/movie/${id}`;
+            player.style.display = 'flex';
+            document.getElementById('guard').style.display = 'block';
+        }
+
+        function closePlayer() {
+            player.style.display = 'none';
+            iframe.src = '';
+        }
+
+        document.getElementById('search').oninput = (e) => loadMovies(e.target.value);
+        loadMovies();
+    </script>
+</body>
 </html>
