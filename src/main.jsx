@@ -1,14 +1,19 @@
 import { Buffer } from 'buffer';
-window.Buffer = Buffer;
 import process from 'process';
+
+// Force global assignment BEFORE any other imports
+window.Buffer = Buffer;
 window.process = process;
+window.global = window;
 
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-)
+// Use dynamic import to ensure the polyfills above are set 
+// before App.jsx logic starts running
+import('./App.jsx').then(({ default: App }) => {
+  const React = import('react').then(({ default: React }) => {
+    import('react-dom/client').then(({ default: ReactDOM }) => {
+      ReactDOM.createRoot(document.getElementById('root')).render(
+        <App />
+      );
+    });
+  });
+});
