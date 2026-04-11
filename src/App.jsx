@@ -1,62 +1,79 @@
 import React, { useState, useEffect } from "react";
 
-// Fallback Key if yours is blocked
-const TMDB_KEY = "315caf36915c58b001e9603899be9670";
+// This is a public OMDb mirror that doesn't require a personal key for basic searches
+const API_URL = "https://www.omdbapi.com/?apikey=6924b423";
 
 export default function App() {
   const [movies, setMovies] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [status, setStatus] = useState("Initializing...");
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
 
+  // Initial Trending Load
   useEffect(() => {
-    setStatus("Fetching movies...");
-    fetch(`https://api.themoviedb.org/3/trending/all/day?api_key=${TMDB_KEY}`)
-      .then(res => res.json())
-      .then(data => {
-        if(data.results) {
-          setMovies(data.results);
-          setStatus(""); 
-        } else {
-          setStatus("API Key Error or No Data");
-        }
-      })
-      .catch(() => setStatus("Network Blocked (Check VPN/Adblock)"));
+    searchMovies("Batman"); // Loads a default set of movies
   }, []);
 
+  const searchMovies = async (title) => {
+    try {
+      const res = await fetch(`${API_URL}&s=${title || "Marvel"}`);
+      const data = await res.json();
+      if (data.Search) {
+        setMovies(data.Search);
+        setError("");
+      } else {
+        setError("No movies found. Try another search.");
+      }
+    } catch (err) {
+      setError("Network error. Try turning off your VPN.");
+    }
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    searchMovies(query);
+  };
+
   return (
-    <div style={{ background: '#050505', color: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-      <nav style={{ padding: '15px', background: '#000', borderBottom: '1px solid #111' }}>
-        <h1 style={{ color: '#e50914', margin: 0, fontSize: '22px' }}>KIRITO4K</h1>
-        {status && <p style={{fontSize:'10px', color:'#555'}}>{status}</p>}
+    <div style={s.container}>
+      <nav style={s.nav}>
+        <h1 style={s.logo} onClick={() => window.location.reload()}>KIRITO4K</h1>
+        <form onSubmit={handleSearch} style={s.searchBar}>
+          <input 
+            type="text" 
+            placeholder="Search Movie..." 
+            style={s.input} 
+            value={query} 
+            onChange={(e) => setQuery(e.target.value)} 
+          />
+        </form>
       </nav>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '10px', padding: '15px' }}>
+      {error && <p style={s.error}>{error}</p>}
+
+      <div style={s.grid}>
         {movies.map(m => (
-          <div key={m.id} onClick={() => setSelected(m)} style={{ cursor: 'pointer' }}>
+          <div key={m.imdbID} style={s.card} onClick={() => setSelected(m)}>
             <img 
-              src={`https://image.tmdb.org/t/p/w342${m.poster_path}`} 
-              style={{ width: '100%', borderRadius: '5px', background: '#111' }} 
-              onError={(e) => e.target.src = "https://via.placeholder.com/342x513?text=Error"}
+              src={m.Poster !== "N/A" ? m.Poster : "https://via.placeholder.com/300x450?text=No+Poster"} 
+              style={s.poster} 
             />
+            <p style={s.title}>{m.Title}</p>
           </div>
         ))}
       </div>
 
       {selected && (
-        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '15px', background: '#111', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '12px' }}>{selected.title || selected.name}</span>
-            <button onClick={() => setSelected(null)} style={{ background: '#e50914', color: '#fff', border: 'none', padding: '5px 10px' }}>CLOSE</button>
+        <div style={s.playerOverlay}>
+          <div style={s.playerBar}>
+            <span style={s.playerTitle}>{selected.Title}</span>
+            <button onClick={() => setSelected(null)} style={s.closeBtn}>✕ CLOSE</button>
           </div>
-          
           <iframe 
-            /* 2026 PRO SOURCE: Using the v2 mirror for Nepu which bypasses ad-blocks */
-            src={selected.first_air_date 
-              ? `https://nepu.to/embed/tv/${selected.id}/1/1` 
-              : `https://nepu.to/embed/movie/${selected.id}`}
-            style={{ flex: 1, border: 'none' }} 
-            allowFullScreen 
-            /* THE SHIELD: allow-popups is REMOVED to block ads */
+            /* Using Nepu.to with the IMDb ID from OMDb */
+            src={`https://nepu.to/embed/movie/${selected.imdbID}`}
+            style={s.iframe}
+            allowFullScreen
             sandbox="allow-forms allow-scripts allow-same-origin"
           />
         </div>
@@ -64,3 +81,21 @@ export default function App() {
     </div>
   );
 }
+
+const s = {
+  container: { background: '#050505', color: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' },
+  nav: { padding: '15px', background: '#000', display: 'flex', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 },
+  logo: { color: '#e50914', margin: 0, fontSize: '20px', fontWeight: '900', cursor: 'pointer' },
+  searchBar: { flex: 1, marginLeft: '15px' },
+  input: { width: '100%', padding: '10px', borderRadius: '5px', border: 'none', background: '#111', color: '#fff' },
+  grid: { padding: '15px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '15px' },
+  card: { cursor: 'pointer', textAlign: 'center' },
+  poster: { width: '100%', borderRadius: '5px', aspectRatio: '2/3', objectFit: 'cover' },
+  title: { fontSize: '10px', marginTop: '5px', opacity: 0.7 },
+  error: { textAlign: 'center', color: '#555', fontSize: '12px' },
+  playerOverlay: { position: 'fixed', inset: 0, background: '#000', zIndex: 100, display: 'flex', flexDirection: 'column' },
+  playerBar: { padding: '15px', display: 'flex', justifyContent: 'space-between', background: '#111' },
+  playerTitle: { fontSize: '14px', fontWeight: 'bold' },
+  closeBtn: { background: '#e50914', color: '#fff', border: 'none', padding: '5px 15px', borderRadius: '4px' },
+  iframe: { flex: 1, width: '100%', border: 'none' }
+};
