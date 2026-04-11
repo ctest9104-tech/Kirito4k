@@ -6,46 +6,47 @@
     <title>KIRITO4K | OMNI</title>
     <style>
         :root { --red: #e50914; --bg: #000; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow-x: hidden; }
         nav { padding: 15px; background: #000; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--red); position: sticky; top: 0; z-index: 100; }
         #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; padding: 15px; }
-        .card { background: #111; border-radius: 8px; overflow: hidden; cursor: pointer; border: 1px solid #222; }
+        .card { background: #111; border-radius: 8px; overflow: hidden; cursor: pointer; border: 1px solid #222; transition: 0.2s; }
+        .card:active { transform: scale(0.95); }
         .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
         #player-ui { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
         .controls { padding: 10px; background: #111; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
         .m-btn { background: #222; color: #ccc; border: 1px solid #444; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; }
-        .m-btn.active { background: var(--red); color: white; }
+        .m-btn.active { background: var(--red); color: white; border-color: var(--red); }
         iframe { flex: 1; border: none; background: #000; }
-        .status-msg { grid-column: 1/-1; text-align: center; padding: 50px; color: #555; font-size: 14px; }
+        .status-msg { grid-column: 1/-1; text-align: center; padding: 50px; color: #888; font-size: 14px; }
     </style>
 </head>
 <body>
     <nav>
-        <div style="color:var(--red); font-weight:900; font-size:22px;">KIRITO4K</div>
-        <input type="text" id="srch" placeholder="Search..." style="background:#111; border:1px solid #333; color:white; padding:8px; border-radius:20px; width:40%;">
+        <div style="color:var(--red); font-weight:900; font-size:22px; cursor:pointer;" onclick="location.reload()">KIRITO4K</div>
+        <input type="text" id="srch" placeholder="Search..." style="background:#111; border:1px solid #333; color:white; padding:8px; border-radius:20px; width:45%;">
     </nav>
 
-    <div id="grid"><div class="status-msg">Connecting to movie mirrors...</div></div>
+    <div id="grid"><div class="status-msg">Loading movies...</div></div>
 
     <div id="player-ui">
         <div class="controls" id="mirror-list"></div>
         <div style="background:#111; padding:10px; display:flex; justify-content:space-between; align-items:center;">
-            <span id="p-title" style="font-size:12px; font-weight:bold;"></span>
-            <button onclick="stop()" style="background:var(--red); color:white; border:none; padding:5px 15px; border-radius:4px;">✕ CLOSE</button>
+            <span id="p-title" style="font-size:12px; font-weight:bold; opacity:0.8;"></span>
+            <button onclick="stop()" style="background:var(--red); color:white; border:none; padding:6px 16px; border-radius:4px; font-weight:bold;">✕ CLOSE</button>
         </div>
-        <iframe id="main-frame" allowfullscreen></iframe>
+        <iframe id="main-frame" allowfullscreen allow="autoplay"></iframe>
     </div>
 
     <script>
-        // Direct TMDB Key (Publicly available for 2026 dev use)
-        const KEY = '315caf36915c58b001e9603899be9670';
+        // Your Verified Key
+        const KEY = '315caf36915758b001e9603899be9670';
         let currentId = '';
 
         const mirrors = [
-            { name: "Mirror 1", url: (id) => `https://vidlink.pro/embed/movie/${id}` },
-            { name: "Mirror 2", url: (id) => `https://vidsrc.to/embed/movie/${id}` },
-            { name: "Mirror 3", url: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}` },
-            { name: "Mirror 4", url: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1` }
+            { name: "VidLink (Pro)", url: (id) => `https://vidlink.pro/embed/movie/${id}` },
+            { name: "Vidsrc.to", url: (id) => `https://vidsrc.to/embed/movie/${id}` },
+            { name: "Vidsrc.me", url: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}` },
+            { name: "SuperEmbed", url: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1` }
         ];
 
         async function init(q = '') {
@@ -56,11 +57,16 @@
                     : `https://api.themoviedb.org/3/trending/movie/week?api_key=${KEY}`;
                 
                 const res = await fetch(endpoint);
-                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                
+                if (res.status === 401) {
+                    grid.innerHTML = `<div class="status-msg" style="color:var(--red)">API Key Error (401). Please check the key string in index.html.</div>`;
+                    return;
+                }
+
                 const data = await res.json();
                 
-                if (data.results.length === 0) {
-                    grid.innerHTML = `<div class="status-msg">No movies found. Try a different search.</div>`;
+                if (!data.results || data.results.length === 0) {
+                    grid.innerHTML = `<div class="status-msg">No results found.</div>`;
                     return;
                 }
 
@@ -70,7 +76,7 @@
                     </div>
                 `).join('');
             } catch (err) {
-                grid.innerHTML = `<div class="status-msg" style="color:var(--red)">Connection Failed: ${err.message}<br>Please check your internet or Vercel logs.</div>`;
+                grid.innerHTML = `<div class="status-msg">Connection Timeout. Check your internet.</div>`;
             }
         }
 
@@ -94,8 +100,12 @@
             document.getElementById('main-frame').src = '';
         }
 
-        document.getElementById('srch').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') init(this.value);
+        // Mobile Friendly Search Trigger
+        document.getElementById('srch').addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') {
+                init(this.value);
+                this.blur();
+            }
         });
 
         init();
