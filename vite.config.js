@@ -5,19 +5,15 @@ export default defineConfig({
   plugins: [react()],
   base: './', 
   define: {
-    // WebTorrent needs 'global' defined to work in the browser
-    global: 'window',
+    global: 'window', // Fixes "global is not defined" error
   },
   resolve: {
     alias: {
-      // Directs Node modules to browser-friendly versions
       path: 'path-browserify',
       crypto: 'crypto-browserify',
       stream: 'stream-browserify',
       buffer: 'buffer',
+      process: 'process',
     },
-  },
-  optimizeDeps: {
-    include: ['buffer', 'process'],
   },
 })
