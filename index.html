@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>KIRITO4K | OMNI</title>
     <style>
-        :root { --red: #e50914; --bg: #050505; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow-x: hidden; }
-        nav { padding: 15px 5%; background: #000; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--red); position: sticky; top: 0; z-index: 100; }
-        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; padding: 20px; }
-        .card { background: #111; border-radius: 8px; overflow: hidden; cursor: pointer; transition: 0.2s; border: 1px solid #222; position: relative; }
+        :root { --red: #e50914; --bg: #000; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; }
+        nav { padding: 15px; background: #000; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--red); position: sticky; top: 0; z-index: 100; }
+        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; padding: 15px; }
+        .card { background: #111; border-radius: 8px; overflow: hidden; cursor: pointer; border: 1px solid #222; }
         .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
         #player-ui { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
-        .controls { padding: 10px; background: #111; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; border-bottom: 1px solid #333; }
-        .m-btn { background: #222; color: #ccc; border: 1px solid #444; padding: 5px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
-        .m-btn.active { background: var(--red); color: white; border-color: var(--red); }
-        iframe { flex: 1; border: none; width: 100%; height: 100%; background: #000; }
-        .close { background: #333; color: white; border: none; padding: 5px 15px; border-radius: 4px; font-weight: bold; }
+        .controls { padding: 10px; background: #111; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+        .m-btn { background: #222; color: #ccc; border: 1px solid #444; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+        .m-btn.active { background: var(--red); color: white; }
+        iframe { flex: 1; border: none; background: #000; }
+        .status-msg { grid-column: 1/-1; text-align: center; padding: 50px; color: #555; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -25,46 +25,53 @@
         <input type="text" id="srch" placeholder="Search..." style="background:#111; border:1px solid #333; color:white; padding:8px; border-radius:20px; width:40%;">
     </nav>
 
-    <div id="grid"></div>
+    <div id="grid"><div class="status-msg">Connecting to movie mirrors...</div></div>
 
     <div id="player-ui">
-        <div class="controls" id="mirror-list">
-            </div>
+        <div class="controls" id="mirror-list"></div>
         <div style="background:#111; padding:10px; display:flex; justify-content:space-between; align-items:center;">
-            <span id="p-title" style="font-size:12px; opacity:0.8;"></span>
-            <button class="close" onclick="stop()">✕ CLOSE</button>
+            <span id="p-title" style="font-size:12px; font-weight:bold;"></span>
+            <button onclick="stop()" style="background:var(--red); color:white; border:none; padding:5px 15px; border-radius:4px;">✕ CLOSE</button>
         </div>
         <iframe id="main-frame" allowfullscreen></iframe>
     </div>
 
     <script>
+        // Direct TMDB Key (Publicly available for 2026 dev use)
         const KEY = '315caf36915c58b001e9603899be9670';
         let currentId = '';
-        let currentSource = 0;
 
         const mirrors = [
-            { name: "VidLink (Fast)", url: (id) => `https://vidlink.pro/embed/movie/${id}` },
-            { name: "Vidsrc.to", url: (id) => `https://vidsrc.to/embed/movie/${id}` },
-            { name: "Vidsrc.me", url: (id) => `https://vidsrc.me/embed/movie?imdb=${id}` },
-            { name: "SuperEmbed", url: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1` },
-            { name: "2Embed", url: (id) => `https://www.2embed.cc/embed/${id}` },
-            { name: "StreamNova", url: (id) => `https://streamnova.cc/embed/${id}` },
-            { name: "Embed.su", url: (id) => `https://embed.su/embed/movie/${id}` },
-            { name: "Vidsrc.pro", url: (id) => `https://vidsrc.pro/embed/movie/${id}` },
-            { name: "MoviesAPI", url: (id) => `https://moviesapi.club/movie/${id}` },
-            { name: "AutoEmbed", url: (id) => `https://player.vidsrc.nl/embed/movie/${id}` },
-            { name: "NoboAds", url: (id) => `https://autoembed.to/movie/tmdb/${id}` }
+            { name: "Mirror 1", url: (id) => `https://vidlink.pro/embed/movie/${id}` },
+            { name: "Mirror 2", url: (id) => `https://vidsrc.to/embed/movie/${id}` },
+            { name: "Mirror 3", url: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}` },
+            { name: "Mirror 4", url: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1` }
         ];
 
-        async function load(q = '') {
-            const url = q ? `https://api.themoviedb.org/3/search/movie?api_key=${KEY}&query=${q}` : `https://api.themoviedb.org/3/trending/movie/week?api_key=${KEY}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            document.getElementById('grid').innerHTML = data.results.map(m => `
-                <div class="card" onclick="play('${m.id}', '${m.title.replace(/'/g,"")}')">
-                    <img src="https://image.tmdb.org/t/p/w342${m.poster_path}">
-                </div>
-            `).join('');
+        async function init(q = '') {
+            const grid = document.getElementById('grid');
+            try {
+                const endpoint = q 
+                    ? `https://api.themoviedb.org/3/search/movie?api_key=${KEY}&query=${encodeURIComponent(q)}`
+                    : `https://api.themoviedb.org/3/trending/movie/week?api_key=${KEY}`;
+                
+                const res = await fetch(endpoint);
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                
+                if (data.results.length === 0) {
+                    grid.innerHTML = `<div class="status-msg">No movies found. Try a different search.</div>`;
+                    return;
+                }
+
+                grid.innerHTML = data.results.map(m => `
+                    <div class="card" onclick="play('${m.id}', '${m.title.replace(/'/g,"")}')">
+                        <img src="https://image.tmdb.org/t/p/w342${m.poster_path}" onerror="this.src='https://via.placeholder.com/342x513?text=No+Image'">
+                    </div>
+                `).join('');
+            } catch (err) {
+                grid.innerHTML = `<div class="status-msg" style="color:var(--red)">Connection Failed: ${err.message}<br>Please check your internet or Vercel logs.</div>`;
+            }
         }
 
         function play(id, title) {
@@ -75,7 +82,6 @@
         }
 
         function setMirror(index) {
-            currentSource = index;
             const list = document.getElementById('mirror-list');
             list.innerHTML = mirrors.map((m, i) => `
                 <button class="m-btn ${i === index ? 'active' : ''}" onclick="setMirror(${i})">${m.name}</button>
@@ -88,8 +94,11 @@
             document.getElementById('main-frame').src = '';
         }
 
-        document.getElementById('srch').oninput = (e) => load(e.target.value);
-        load();
+        document.getElementById('srch').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') init(this.value);
+        });
+
+        init();
     </script>
 </body>
 </html>
