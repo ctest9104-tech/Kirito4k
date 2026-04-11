@@ -5,11 +5,12 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   define: {
-    global: 'window',
+    // This is safer than the 'global' alias for some edge cases
+    'process.env': {},
+    global: 'globalThis', 
   },
   resolve: {
     alias: {
-      // This line is the fix for the DHT "Client" error:
       'bittorrent-dht': 'identity-obj-proxy', 
       path: 'path-browserify',
       crypto: 'crypto-browserify',
@@ -18,4 +19,8 @@ export default defineConfig({
       process: 'process',
     },
   },
+  optimizeDeps: {
+    // Forces Vite to include these in the pre-bundle
+    include: ['buffer', 'process', 'webtorrent']
+  }
 })
