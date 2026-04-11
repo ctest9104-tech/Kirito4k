@@ -5,17 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kirito4k</title>
     <script>
-      // Emergency Polyfills for WebTorrent
       window.global = window;
       window.process = { env: {} };
-    </script>
-    <script type="module">
-      import { Buffer } from 'https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm';
-      window.Buffer = Buffer;
     </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="src/main.jsx"></script>
   </body>
 </html>
