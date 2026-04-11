@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef } from "react";
 import WebTorrent from "webtorrent";
 
 const TMDB_KEY = "315caf36915c58b001e9603899be9670"; 
-const client = new WebTorrent();
+const client = new WebTorrent({ dht: false });
 
 function TorrentPlayer({ magnet, onClose }) {
   const videoRef = useRef(null);
