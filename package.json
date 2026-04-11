@@ -1,7 +1,8 @@
 {
   "name": "kirito4k",
   "version": "1.0.0",
+  "private": true,
   "scripts": {
-    "start": "serve ."
+    "start": "npx serve ."
   }
 }
