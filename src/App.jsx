@@ -1,118 +1,71 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import WebTorrent from "webtorrent";
 
-// --- CONFIGURATION ---
-// I've included a public fallback key, but for long-term use, 
-// get your own free key at themoviedb.org
-const TMDB_API_KEY = "315caf36915c58b001e9603899be9670"; 
-const IMG_BASE = "https://image.tmdb.org/t/p/w500";
+const TMDB_KEY = "315caf36915c58b001e9603899be9670"; 
+const client = new WebTorrent();
 
-// --- COMPONENTS ---
+function TorrentPlayer({ magnet, onClose }) {
+  const videoRef = useRef(null);
+  const [progress, setProgress] = useState(0);
 
-const Player = ({ item, onClose }) => {
-  const [source, setSource] = useState("vidsrc");
-  
-  // These are the most resilient mirrors for 2026
-  const getUrl = () => {
-    const isTV = !!item.first_air_date;
-    const id = item.id;
-    if (source === "vidsrc") {
-      return isTV ? `https://vidsrc.icu/embed/tv/${id}/1/1` : `https://vidsrc.icu/embed/movie/${id}`;
-    }
-    return isTV ? `https://vidsrc.pm/embed/tv/${id}/1/1` : `https://vidsrc.pm/embed/movie/${id}`;
+  useEffect(() => {
+    client.add(magnet, (torrent) => {
+      // Find the largest file (usually the movie)
+      const file = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.mkv'));
+      if (file) {
+        file.renderTo(videoRef.current);
+      }
+      
+      torrent.on('download', () => {
+        setProgress(Math.round(torrent.progress * 100));
+      });
+    });
+
+    return () => {
+      // Clean up when closing
+      const torrent = client.get(magnet);
+      if (torrent) torrent.destroy();
+    };
+  }, [magnet]);
+
+  return (
+    <div style={{position:'fixed', inset:0, background:'#000', zIndex:1000, display:'flex', flexDirection:'column'}}>
+      <div style={{padding:'10px 20px', background:'#111', color:'#fff', display:'flex', justifyContent:'space-between'}}>
+        <span>⚡ STREAMING TORRENT: {progress}% BUFFED</span>
+        <button onClick={onClose} style={{background:'#e50914', border:'none', color:'#fff', padding:'5px 15px', borderRadius:'4px', cursor:'pointer'}}>✕ CLOSE</button>
+      </div>
+      <video ref={videoRef} controls autoPlay style={{flex:1, width:'100%'}} />
+    </div>
+  );
+}
+
+export default function App() {
+  const [movies, setMovies] = useState([]);
+  const [play, setPlay] = useState(null);
+
+  useEffect(() => {
+    fetch(`https://api.themoviedb.org/3/trending/all/week?api_key=${TMDB_KEY}`)
+      .then(res => res.json()).then(data => setMovies(data.results || []));
+  }, []);
+
+  const startTorrent = (item) => {
+    // For a real torrent app, you'd fetch a magnet link here.
+    // This is a sample magnet (Big Buck Bunny) to test your player.
+    const sampleMagnet = "magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Fzer0day.ch%3A1337&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337";
+    setPlay(sampleMagnet);
   };
 
   return (
-    <div className="player-overlay">
-      <div className="player-controls">
-        <div className="source-picker">
-          <button onClick={() => setSource("vidsrc")} className={source === "vidsrc" ? "active" : ""}>Server 1</button>
-          <button onClick={() => setSource("mirror")} className={source === "mirror" ? "active" : ""}>Server 2</button>
-        </div>
-        <button className="close-btn" onClick={onClose}>✕ Close</button>
-      </div>
-      <iframe 
-        src={getUrl()} 
-        allowFullScreen 
-        sandbox="allow-forms allow-scripts allow-same-origin"
-        title="video-player"
-      />
-    </div>
-  );
-};
-
-export default function KiritoApp() {
-  const [movies, setMovies] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`https://api.themoviedb.org/3/trending/all/week?api_key=${TMDB_API_KEY}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setMovies(data.results || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div className="loader">Loading Kirito4K...</div>;
-
-  return (
-    <div className="app-container">
-      <style>{`
-        :root { --red: #e50914; --bg: #050505; --card-bg: #141414; }
-        body { margin: 0; background: var(--bg); color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-        .app-container { min-height: 100vh; }
-        .nav { height: 70px; display: flex; align-items: center; padding: 0 4%; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); position: fixed; width: 100%; z-index: 100; box-sizing: border-box; }
-        .logo { color: var(--red); font-weight: 900; font-size: 28px; letter-spacing: -1px; cursor: pointer; }
-        
-        .hero { height: 80vh; background-size: cover; background-position: center; display: flex; align-items: center; padding: 0 4%; position: relative; }
-        .hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(77deg, rgba(0,0,0,0.8) 0, rgba(0,0,0,0) 85%), linear-gradient(to top, var(--bg), transparent); }
-        .hero-content { z-index: 10; max-width: 600px; }
-        .hero-title { font-size: 3rem; margin: 0 0 1rem; }
-        .hero-desc { font-size: 1.2rem; line-height: 1.4; color: #ccc; }
-
-        .row { padding: 20px 4%; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
-        .card { position: relative; cursor: pointer; transition: transform 0.3s ease; border-radius: 4px; overflow: hidden; }
-        .card:hover { transform: scale(1.08); z-index: 10; }
-        .card img { width: 100%; height: auto; display: block; }
-        
-        .player-overlay { position: fixed; inset: 0; background: black; z-index: 1000; display: flex; flex-direction: column; }
-        .player-controls { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #111; }
-        .source-picker button { background: #333; color: white; border: none; padding: 6px 15px; margin-right: 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-        .source-picker button.active { background: var(--red); }
-        .close-btn { background: none; border: none; color: white; font-size: 20px; cursor: pointer; }
-        iframe { flex: 1; border: none; background: black; }
-        .loader { height: 100vh; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--red); font-weight: bold; }
-      `}</style>
-
-      <nav className="nav">
-        <div className="logo">KIRITO4K</div>
-      </nav>
-
-      {movies[0] && (
-        <div className="hero" style={{ backgroundImage: `url(https://image.tmdb.org/t/p/original${movies[0].backdrop_path})` }}>
-          <div className="hero-content">
-            <h1 className="hero-title">{movies[0].title || movies[0].name}</h1>
-            <p className="hero-desc">{movies[0].overview?.substring(0, 160)}...</p>
-            <button className="play-btn" onClick={() => setSelected(movies[0])} style={{ background: 'white', color: 'black', border: 'none', padding: '12px 30px', borderRadius: '4px', fontWeight: 'bold', fontSize: '18px', cursor: 'pointer', marginTop: '10px' }}>▶ Play</button>
+    <div style={{background:'#050505', color:'#fff', minHeight:'100vh', padding:'40px'}}>
+      <h1 style={{color:'#e50914'}}>KIRITO4K <span style={{fontSize:'12px', color:'#555'}}>TORRENT BETA</span></h1>
+      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:'20px'}}>
+        {movies.map(m => (
+          <div key={m.id} onClick={() => startTorrent(m)} style={{cursor:'pointer'}}>
+            <img src={"https://image.tmdb.org/t/p/w500" + m.poster_path} style={{width:'100%', borderRadius:'8px'}} alt="" />
           </div>
-        </div>
-      )}
-
-      <div className="row">
-        <h3>Trending Now</h3>
-        <div className="grid">
-          {movies.map((m) => (
-            <div key={m.id} className="card" onClick={() => setSelected(m)}>
-              <img src={`${IMG_BASE}${m.poster_path}`} alt={m.title} />
-            </div>
-          ))}
-        </div>
+        ))}
       </div>
-
-      {selected && <Player item={selected} onClose={() => setSelected(null)} />}
+      {play && <TorrentPlayer magnet={play} onClose={() => setPlay(null)} />}
     </div>
   );
 }
