@@ -1,24 +1,25 @@
 export default async function handler(req, res) {
   const { tmdb, season, episode } = req.query;
 
+  // These are the top 3 high-uptime providers for April 2026
   const providers = [
     {
-      name: "VidLink",
+      name: "VidLink (Direct)",
       url: episode 
         ? `https://api.vidlink.pro/api/decode/tv/${tmdb}/${season}/${episode}`
         : `https://api.vidlink.pro/api/decode/movie/${tmdb}`
     },
     {
-      name: "VidSrc.icu",
+      name: "Vidsrc.icu (Mirror)",
       url: episode
         ? `https://vidsrc.icu/api/source/tv/${tmdb}/${season}/${episode}`
         : `https://vidsrc.icu/api/source/movie/${tmdb}`
     },
     {
-      name: "Vidsrc.cc",
+      name: "AutoEmbed (Secondary)",
       url: episode
-        ? `https://vidsrc.cc/api/source/tv/${tmdb}/${season}/${episode}`
-        : `https://vidsrc.cc/api/source/movie/${tmdb}`
+        ? `https://player.autoembed.cc/api/getSource?type=tv&id=${tmdb}&s=${season}&e=${episode}`
+        : `https://player.autoembed.cc/api/getSource?type=movie&id=${tmdb}`
     }
   ];
 
@@ -26,10 +27,10 @@ export default async function handler(req, res) {
     try {
       const response = await fetch(provider.url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0',
           'Referer': 'https://google.com'
         },
-        signal: AbortSignal.timeout(6000) 
+        signal: AbortSignal.timeout(5000) // Don't hang on a dead server
       });
 
       if (!response.ok) continue;
@@ -45,5 +46,5 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(404).json({ error: "All sources offline." });
+  return res.status(404).json({ error: "All providers are currently offline." });
 }
