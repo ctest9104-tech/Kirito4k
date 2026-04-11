@@ -1,18 +1,17 @@
 import { Buffer } from 'buffer';
 import process from 'process';
 
-// Immediate global assignment
 window.Buffer = Buffer;
 window.process = process;
 window.global = window;
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// IMPORTANT: This MUST match the exact filename on GitHub. 
-// If your file is 'App.jsx', use 'App.jsx' here.
+// Using the exact name you confirmed is on GitHub
 import App from './App.jsx'; 
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
